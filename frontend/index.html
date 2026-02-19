@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Primary Meta Tags -->
+    <title>Elevex - Inteligência Técnica para Elevadores</title>
+    <meta name="title" content="Elevex - Inteligência Técnica para Elevadores" />
+    <meta name="description" content="Resolva falhas de elevadores de qualquer marca ou modelo em minutos. A IA que ajuda técnicos e empresas a diagnosticar problemas rapidamente." />
+    <meta name="keywords" content="elevadores, manutenção, técnico, diagnósticos, inteligência artificial, manual elevador, otis, schindler, thyssenkrupp, atlas" />
+    <meta name="theme-color" content="#2563eb" /> <!-- blue-600 -->
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://elevex.app/" />
+    <meta property="og:title" content="Elevex - Inteligência Técnica para Elevadores" />
+    <meta property="og:description" content="Resolva falhas de elevadores de qualquer marca ou modelo em minutos. O assistente técnico que cabe no seu bolso." />
+    <meta property="og:image" content="https://elevex.app/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://elevex.app/" />
+    <meta property="twitter:title" content="Elevex - Inteligência Técnica para Elevadores" />
+    <meta property="twitter:description" content="Resolva falhas de elevadores de qualquer marca ou modelo em minutos. O assistente técnico que cabe no seu bolso." />
+    <meta property="twitter:image" content="https://elevex.app/og-image.png" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#eff6ff', // blue-50
+                100: '#dbeafe', // blue-100
+                200: '#bfdbfe', // blue-200
+                300: '#93c5fd', // blue-300
+                400: '#60a5fa', // blue-400
+                500: '#3b82f6', // blue-500
+                600: '#2563eb', // blue-600 (Primary)
+                700: '#1d4ed8', // blue-700
+                800: '#1e40af', // blue-800
+                900: '#1e3a8a', // blue-900
+              },
+              voltz: { // Keeping legacy name for compatibility but mapping to blue
+                bg: '#f8fafc', 
+                card: '#ffffff',
+                input: '#f1f5f9',
+                primary: '#2563eb', // Remapped to blue-600
+                accent: '#3b82f6', // Remapped to blue-500
+                light: '#eff6ff', // Remapped to blue-50
+                text: '#0f172a', 
+                muted: '#64748b', 
+                border: '#e2e8f0', 
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+              'slide-up': 'slideUp 0.6s ease-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+        scroll-behavior: smooth;
+      }
+      /* Custom scrollbar for chat */
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+      }
+      .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+      }
+      
+      /* Light mode scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-voltz-bg text-voltz-text antialiased">
+    <div id="root"></div>
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
