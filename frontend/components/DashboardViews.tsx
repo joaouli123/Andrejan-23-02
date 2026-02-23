@@ -24,7 +24,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onSelect }) => {
     return (
         <div 
             onClick={() => onSelect(agent.id)}
-            className="bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 cursor-pointer transition-all duration-300 group relative overflow-hidden min-h-[180px] sm:h-64 flex flex-col"
+        className="bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-300 cursor-pointer transition-all duration-300 group relative overflow-hidden min-h-[210px] sm:min-h-[260px] flex flex-col"
         >
             <div className="absolute -right-6 -top-6 text-blue-50 group-hover:text-blue-100/80 transition-colors duration-500 opacity-80 hidden sm:block">
                 <IconComponent size={140} className="opacity-100" />
@@ -47,16 +47,11 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onSelect }) => {
             
             <div className="relative z-10 flex-1">
                 <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-1 group-hover:text-blue-700 transition-colors">{agent.name}</h3>
-                <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">{agent.role}</p>
-                {agent.brandName && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
-                        📚 {agent.brandName}
-                    </span>
-                )}
-                <p className="text-slate-600 leading-relaxed pr-8 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3">{agent.description}</p>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">{agent.role}</p>
+              <p className="text-slate-600 leading-relaxed text-xs sm:text-sm line-clamp-3">{agent.description}</p>
             </div>
 
-            <div className="absolute bottom-5 right-5 sm:bottom-8 sm:right-8 z-10">
+            <div className="mt-4 sm:mt-5 self-end relative z-10">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                     <ArrowRight size={16} />
                 </div>
