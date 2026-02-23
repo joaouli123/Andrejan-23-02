@@ -5,11 +5,12 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
 
-  const proxyTarget = env.RAG_SERVER_URL || 'https://api.uxcodedev.com.br';
+  const defaultBackendUrl = 'https://api.uxcodedev.com.br';
+  const proxyTarget = env.RAG_SERVER_URL || defaultBackendUrl;
 
     // Frontend URL: em dev SEMPRE vazio (usa URLs relativas + proxy do Vite)
     // Em build de produção, pode definir RAG_PUBLIC_URL se o API estiver em domínio diferente
-    const frontendRagUrl = mode === 'development' ? '' : (env.RAG_PUBLIC_URL || env.RAG_SERVER_URL || '');
+    const frontendRagUrl = mode === 'development' ? '' : (env.RAG_PUBLIC_URL || env.RAG_SERVER_URL || defaultBackendUrl);
     
     return {
       server: {
