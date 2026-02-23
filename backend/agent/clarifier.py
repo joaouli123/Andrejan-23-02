@@ -25,6 +25,19 @@ SPECIFIC_INDICATORS = [
     r"\bgen\d\b", r"\b[a-z]{2,4}\d{3,}\b",
 ]
 
+MODEL_CODE_PATTERNS = [
+    r"\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b",  # OVF10, XO 508, GEN2, ADV-210
+    r"\b\d{3,5}[a-z]{0,3}\b",                 # 560, 210dp
+    r"\bgen\s?\d\b",                         # gen2, gen 2
+]
+
+TECHNICAL_QUESTION_HINTS = [
+    r"\bfalha\b", r"\berro\b", r"\bc[oó]digo\b", r"\bdefeito\b", r"\bproblema\b",
+    r"\bn[aã]o\s+funciona\b", r"\bn[aã]o\s+liga\b", r"\bn[aã]o\s+sobe\b", r"\bn[aã]o\s+desce\b",
+    r"\bliga[cç][aã]o\b", r"\besquema\b", r"\bplaca\b", r"\bdrive\b", r"\binversor\b",
+    r"\bcalibra[cç][aã]o\b", r"\bajuste\b", r"\bparametr", r"\bconfigura", r"\bmanual\b",
+]
+
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
@@ -180,6 +193,59 @@ def _looks_like_bad_clarification(text: str) -> bool:
         return True
 
     return False
+
+
+def _has_model_or_code_hint(text: str) -> bool:
+    q = (text or "").lower()
+    for pattern in MODEL_CODE_PATTERNS:
+        if re.search(pattern, q, re.IGNORECASE):
+            return True
+    return False
+
+
+def should_require_model_clarification(query: str, chat_history: list[dict]) -> bool:
+    """
+    Enforce model/board/code clarification for technical troubleshooting queries
+    when user didn't provide identifying details yet.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+
+    # If user already provided model/code in this message, no clarification needed.
+    if _has_model_or_code_hint(q):
+        return False
+
+    # If user is answering a previous assistant question about model/placa,
+    # and this turn contains an identifier, proceed directly.
+    if chat_history:
+        last_assistant = next(
+            (m.get("content", "") for m in reversed(chat_history) if m.get("role") == "assistant"),
+            "",
+        )
+        ask_about_model = bool(re.search(r"modelo|placa|controlador|c[oó]digo", last_assistant.lower()))
+        if ask_about_model and _has_model_or_code_hint(q):
+            return False
+
+    # If previous USER messages already contain model/code, don't ask again.
+    previous_user_text = " ".join(
+        m.get("content", "")
+        for m in (chat_history or [])
+        if m.get("role") == "user"
+    )
+    if _has_model_or_code_hint(previous_user_text):
+        return False
+
+    # Only enforce this for technical troubleshooting-like questions.
+    is_technical = any(re.search(p, q, re.IGNORECASE) for p in TECHNICAL_QUESTION_HINTS)
+    if not is_technical:
+        return False
+
+    # For very short replies after a question (e.g. "sim", "isso") don't force here.
+    if len(q.split()) <= 2:
+        return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------

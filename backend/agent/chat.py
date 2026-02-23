@@ -10,6 +10,7 @@ from ingestion.embedder import search_brand, _extract_search_keywords
 from ingestion.gemini_vision import rerank_chunks
 from agent.clarifier import (
     needs_clarification,
+    should_require_model_clarification,
     get_clarification_question,
     generate_answer,
     analyze_search_confidence,
@@ -99,6 +100,29 @@ async def chat(
     )
     db.add(user_msg)
     await db.commit()
+
+    # --- Step 0: Mandatory model/board/code clarification gate ---
+    # If technical question lacks identifying info, always ask first.
+    if should_require_model_clarification(query, history):
+        clarification = (
+            "Para te responder com precisão, me informe primeiro o **modelo do elevador** "
+            "(como aparece na etiqueta) e, se tiver, o **código da placa/controlador** "
+            "ou **código de falha** exibido."
+        )
+        asst_msg = ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=clarification,
+            sources=json.dumps([]),
+        )
+        db.add(asst_msg)
+        await db.commit()
+        return {
+            "session_id": session.session_id,
+            "answer": clarification,
+            "sources": [],
+            "needs_clarification": True,
+        }
 
     # --- Step 1: Quick heuristic check (very short queries) ---
     if needs_clarification(query, history):
