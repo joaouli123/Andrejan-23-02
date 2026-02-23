@@ -5,9 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
 
-  // Sempre prioriza backend local deste projeto.
-  const LOCAL_API = 'http://localhost:8000';
-  const proxyTarget = env.RAG_SERVER_URL || LOCAL_API;
+  const proxyTarget = env.RAG_SERVER_URL || 'https://api.uxcodedev.com.br';
 
     // Frontend URL: em dev SEMPRE vazio (usa URLs relativas + proxy do Vite)
     // Em build de produção, pode definir RAG_PUBLIC_URL se o API estiver em domínio diferente

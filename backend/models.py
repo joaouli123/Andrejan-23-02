@@ -55,6 +55,7 @@ class Document(Base):
     original_filename = Column(String(500), nullable=False)
     total_pages = Column(Integer, default=0)
     processed_pages = Column(Integer, default=0)
+    file_size = Column(Integer, default=0)  # tamanho em bytes
     status = Column(String(50), default="pending")  # pending, processing, completed, error
     error_message = Column(Text, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)

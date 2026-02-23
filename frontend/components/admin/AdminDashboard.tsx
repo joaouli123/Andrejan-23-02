@@ -62,11 +62,21 @@ export default function AdminDashboard() {
 
   // ======================== DATA LOADING ========================
 
+  async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
 
     try {
-      const brandsRes = await fetch(ragUrl('/api/brands'));
+      const brandsRes = await fetchWithTimeout(ragUrl('/api/brands'));
       const loadedBrands = brandsRes.ok ? await brandsRes.json() : [];
       setBrands(loadedBrands || []);
 
@@ -75,7 +85,7 @@ export default function AdminDashboard() {
 
       const fMap: Record<string, SourceFile[]> = {};
       await Promise.all((loadedBrands || []).map(async (brand: Brand) => {
-        const docsRes = await fetch(ragUrl(`/api/brands/${brand.id}/documents`));
+        const docsRes = await fetchWithTimeout(ragUrl(`/api/brands/${brand.id}/documents`));
         const docs = docsRes.ok ? await docsRes.json() : [];
         fMap[`brand_${brand.id}`] = (docs || []).map((doc: any) => ({
           id: String(doc.id),
@@ -123,14 +133,22 @@ export default function AdminDashboard() {
 
   async function addBrand() {
     if (!newBrandName.trim()) return;
-    const response = await fetch(ragUrl('/api/brands'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newBrandName.trim() }),
-    });
-    if (response.ok) {
-      setNewBrandName('');
-      fetchAll();
+    try {
+      const response = await fetch(ragUrl('/api/brands'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newBrandName.trim() }),
+      });
+      if (response.ok) {
+        setNewBrandName('');
+        fetchAll();
+      } else {
+        const data = await response.json().catch(() => null);
+        const msg = data?.detail || data?.message || `Erro ${response.status}`;
+        alert(`❌ ${msg}`);
+      }
+    } catch (err: any) {
+      alert(`❌ Erro de conexão: ${err?.message || 'Servidor indisponível'}`);
     }
   }
 
@@ -187,6 +205,21 @@ export default function AdminDashboard() {
       next[brandId] = items.filter((item) => item.id !== id);
     });
     setModelsMap(next);
+  }
+
+  async function deleteFile(file: SourceFile) {
+    if (!confirm(`Excluir o arquivo "${file.title}"? Isso removerá o arquivo e todos os dados indexados.`)) return;
+    try {
+      const res = await fetch(ragUrl(`/api/documents/${file.id}`), { method: 'DELETE' });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || payload?.message || 'Falha ao excluir arquivo');
+      }
+      await fetchAll();
+    } catch (err: any) {
+      console.error('[DeleteFile] erro:', err);
+      alert(`❌ ${err?.message || 'Erro ao excluir arquivo'}`);
+    }
   }
 
   // ======================== UPLOAD ACTIONS ========================
@@ -477,6 +510,13 @@ export default function AdminDashboard() {
             }`}>
               {file.status}
             </span>
+            <button
+              onClick={() => deleteFile(file)}
+              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+              title="Excluir arquivo"
+            >
+              <Trash2 size={15} />
+            </button>
           </div>
         ))}
       </div>

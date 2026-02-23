@@ -1,6 +1,8 @@
 import time
+import logging
 from typing import Optional
 import re
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -13,11 +15,12 @@ from agent.chat import chat
 from config import get_settings
 from database import get_db, AsyncSessionLocal
 from ingestion.processor import process_document, get_job_progress
-from models import Brand, Document, User
+from models import Brand, Document, Page, User
 
 
 router = APIRouter(prefix="/api", tags=["rag-compat"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class QueryRequest(BaseModel):
@@ -152,11 +155,45 @@ async def compat_brand_documents(brand_id: str, db: AsyncSession = Depends(get_d
             "status": "indexed" if d.status in ("completed", "completed_with_errors") else d.status,
             "processed_pages": d.processed_pages,
             "total_pages": d.total_pages,
-            "file_size": None,
+            "file_size": d.file_size or 0,
             "created_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
         }
         for d in docs
     ]
+
+
+@router.delete("/documents/{doc_id}")
+async def compat_delete_document(doc_id: str, db: AsyncSession = Depends(get_db)):
+    if not str(doc_id).isdigit():
+        raise HTTPException(status_code=400, detail="ID inválido")
+
+    doc_id_int = int(doc_id)
+    result = await db.execute(select(Document).where(Document.id == doc_id_int))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento não encontrado")
+
+    brand_result = await db.execute(select(Brand).where(Brand.id == doc.brand_id))
+    brand = brand_result.scalar_one_or_none()
+
+    if brand:
+        try:
+            from ingestion.embedder import delete_document_vectors
+            delete_document_vectors(brand.slug, doc_id_int)
+        except Exception:
+            pass
+
+    pages_result = await db.execute(select(Page).where(Page.document_id == doc_id_int))
+    for page in pages_result.scalars().all():
+        await db.delete(page)
+
+    file_path = Path(settings.upload_dir) / doc.filename
+    if file_path.exists():
+        file_path.unlink()
+
+    await db.delete(doc)
+    await db.commit()
+    return {"ok": True, "message": "Documento removido"}
 
 
 @router.post("/check-duplicates")
@@ -165,7 +202,7 @@ async def compat_check_duplicates(payload: DuplicateCheckRequest, db: AsyncSessi
     if not names:
         return {"duplicates": []}
 
-    normalized = {n.lower() for n in names}
+    normalized_input = {n: _normalize_filename(n) for n in names}
 
     stmt = select(Document)
     if payload.brandId and str(payload.brandId).isdigit():
@@ -174,11 +211,16 @@ async def compat_check_duplicates(payload: DuplicateCheckRequest, db: AsyncSessi
     result = await db.execute(stmt)
     docs = result.scalars().all()
 
+    existing_normalized = [
+        _normalize_filename(doc.original_filename or "")
+        for doc in docs
+        if doc.status in ("completed", "processing", "pending")
+    ]
+
     duplicates: list[str] = []
-    for doc in docs:
-        filename = str(doc.original_filename or "")
-        if filename.lower() in normalized:
-            duplicates.append(filename)
+    for original_name, norm in normalized_input.items():
+        if _is_duplicate_of_any(norm, existing_normalized):
+            duplicates.append(original_name)
 
     return {"duplicates": sorted(set(duplicates), key=str.lower)}
 
@@ -208,6 +250,26 @@ async def compat_upload_brand_document(
     brand_upload_dir = Path(settings.upload_dir) / brand.slug
     brand_upload_dir.mkdir(parents=True, exist_ok=True)
 
+    # ── Server-side duplicate check ──
+    norm_new = _normalize_filename(pdf.filename)
+    existing_result = await db.execute(
+        select(Document).where(
+            Document.brand_id == int(brand_id),
+            Document.status.in_(["completed", "processing", "pending"])
+        )
+    )
+    existing_docs = existing_result.scalars().all()
+    for edoc in existing_docs:
+        existing_norm = _normalize_filename(edoc.original_filename or "")
+        if _is_duplicate_of_any(norm_new, [existing_norm]):
+            logger.info(f"Duplicata bloqueada: '{pdf.filename}' já existe como '{edoc.original_filename}' (doc_id={edoc.id})")
+            return {
+                "skipped": True,
+                "reason": f"Arquivo já indexado como '{edoc.original_filename}'",
+                "existing_doc_id": str(edoc.id),
+                "filename": pdf.filename
+            }
+
     safe_filename = f"{uuid.uuid4()}_{pdf.filename}"
     content = await pdf.read()
     file_path = brand_upload_dir / safe_filename
@@ -228,6 +290,39 @@ async def compat_upload_brand_document(
     background_tasks.add_task(_run_ingestion_bg, document.id, brand.slug, job_id)
 
     return {"job_id": job_id, "doc_id": str(document.id), "filename": document.original_filename}
+
+
+def _normalize_filename(name: str) -> str:
+    """Normalize filename for duplicate comparison.
+    Removes accents, UUID prefixes, special chars. Case-insensitive.
+    'otis INSTALAÇÃO DO ACESSE CODE OTIS.pdf' -> 'instalacao do acesse code otis'
+    """
+    # Remove .pdf extension
+    name = re.sub(r'\.pdf$', '', name.strip(), flags=re.IGNORECASE)
+    # Remove UUID prefix (8-4-4-4-12 hex pattern)
+    name = re.sub(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_', '', name)
+    # Remove accents
+    nfkd = unicodedata.normalize('NFKD', name)
+    name = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Lowercase
+    name = name.lower()
+    # Remove special chars, keep only letters, digits, spaces
+    name = re.sub(r'[^a-z0-9\s]', ' ', name)
+    # Collapse whitespace
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
+def _is_duplicate_of_any(new_name: str, existing_names: list) -> bool:
+    """Check if new_name is a duplicate of any existing name.
+    Uses exact normalized match only (safe, no false positives).
+    """
+    if not new_name:
+        return False
+    for existing in existing_names:
+        if existing and new_name == existing:
+            return True
+    return False
 
 
 @router.get("/upload/status/{job_id}")

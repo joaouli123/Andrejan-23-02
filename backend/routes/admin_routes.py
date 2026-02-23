@@ -1,5 +1,7 @@
 import asyncio
 import os
+import re
+import unicodedata
 import uuid
 import json
 import logging
@@ -125,6 +127,7 @@ async def list_documents(
         {
             "id": d.id,
             "filename": d.original_filename,
+            "file_size": d.file_size or 0,
             "total_pages": d.total_pages,
             "processed_pages": d.processed_pages,
             "status": d.status,
@@ -153,10 +156,29 @@ async def upload_documents(
     brand_upload_dir = Path(settings.upload_dir) / brand.slug
     brand_upload_dir.mkdir(parents=True, exist_ok=True)
 
+    # Pre-load existing docs for this brand to check duplicates
+    existing_result = await db.execute(
+        select(Document).where(Document.brand_id == brand_id)
+    )
+    existing_docs = existing_result.scalars().all()
+    existing_names = [
+        _normalize_filename(doc.original_filename or "")
+        for doc in existing_docs
+        if doc.status in ("completed", "processing", "pending")
+    ]
+
     jobs = []
+    skipped = []
     for file in files:
         if not file.filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail=f"{file.filename} não é um PDF")
+
+        # ── Duplicate check (server-side) ──
+        norm_name = _normalize_filename(file.filename)
+        if _is_duplicate_of_any(norm_name, existing_names):
+            logger.info(f"Arquivo duplicado ignorado: {file.filename} (já existe na marca {brand_id})")
+            skipped.append(file.filename)
+            continue
 
         # Save file
         safe_filename = f"{uuid.uuid4()}_{file.filename}"
@@ -171,10 +193,14 @@ async def upload_documents(
             brand_id=brand_id,
             filename=str(Path(brand.slug) / safe_filename),
             original_filename=file.filename,
+            file_size=len(content),
             status="pending",
         )
         db.add(doc)
         await db.flush()
+
+        # Track this name so subsequent files in same batch also deduplicate
+        existing_names.append(norm_name)
 
         job_id = str(uuid.uuid4())
 
@@ -197,7 +223,43 @@ async def upload_documents(
             "filename": file.filename,
         })
 
-    return {"message": f"{len(files)} arquivo(s) enviado(s)", "jobs": jobs}
+    msg = f"{len(jobs)} arquivo(s) enviado(s)"
+    if skipped:
+        msg += f", {len(skipped)} ignorado(s) (duplicata)"
+    return {"message": msg, "jobs": jobs, "skipped": skipped}
+
+
+def _normalize_filename(name: str) -> str:
+    """Normalize filename for duplicate comparison.
+    Removes accents, UUID prefixes, special chars. Case-insensitive.
+    'otis INSTALAÇÃO DO ACESSE CODE OTIS.pdf' -> 'instalacao do acesse code otis'
+    """
+    # Remove .pdf extension
+    name = re.sub(r'\.pdf$', '', name.strip(), flags=re.IGNORECASE)
+    # Remove UUID prefix (8-4-4-4-12 hex pattern)
+    name = re.sub(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}_', '', name)
+    # Remove accents
+    nfkd = unicodedata.normalize('NFKD', name)
+    name = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Lowercase
+    name = name.lower()
+    # Remove special chars, keep only letters, digits, spaces
+    name = re.sub(r'[^a-z0-9\s]', ' ', name)
+    # Collapse whitespace
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
+def _is_duplicate_of_any(new_name: str, existing_names: list) -> bool:
+    """Check if new_name is a duplicate of any existing name.
+    Uses exact normalized match only (safe, no false positives).
+    """
+    if not new_name:
+        return False
+    for existing in existing_names:
+        if existing and new_name == existing:
+            return True
+    return False
 
 
 async def _run_ingestion(doc_id: int, brand_slug: str, job_id: str):

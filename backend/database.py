@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import event
-from models import Base, User, Brand
+from sqlalchemy import event, select
+from models import Base, User, Brand, Document
 from config import get_settings
 from security import get_password_hash
 import os
@@ -32,8 +32,14 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as session:
+        # Recover orphaned processing docs after crash/restart
+        processing_docs = await session.execute(select(Document).where(Document.status == "processing"))
+        for doc in processing_docs.scalars().all():
+            doc.status = "error"
+            if not doc.error_message:
+                doc.error_message = "Processamento interrompido por reinício do servidor"
+
         # Create admin user if not exists
-        from sqlalchemy import select
         result = await session.execute(select(User).where(User.email == settings.admin_email))
         admin = result.scalar_one_or_none()
 

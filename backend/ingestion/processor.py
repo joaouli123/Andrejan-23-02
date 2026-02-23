@@ -7,12 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from models import Document, Page
-from ingestion.gemini_vision import extract_page_from_pdf, upload_pdf_to_gemini, delete_gemini_file
+from ingestion.gemini_vision import (
+    GeminiQuotaExceededError,
+    extract_page_from_pdf,
+    upload_pdf_to_gemini,
+    delete_gemini_file,
+)
+from ingestion.open_source_vision import extract_page_open_source
 from ingestion.embedder import upsert_page, ensure_collection
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+PROVIDER_GEMINI = "gemini"
+PROVIDER_OPEN_SOURCE = "open_source"
 
 # In-memory job progress tracker
 _job_progress: dict[str, dict] = {}
@@ -94,11 +102,24 @@ async def process_document(
         _job_progress[job_id]["updated_at"] = time.time()
         logger.info(f"PDF has {total} pages: {doc.original_filename}")
 
-        # Upload PDF to Gemini File API (once for all pages)
-        _job_progress[job_id]["status"] = "uploading_to_gemini"
-        _job_progress[job_id]["updated_at"] = time.time()
-        logger.info(f"Uploading PDF to Gemini File API...")
-        uploaded_file = upload_pdf_to_gemini(pdf_path)
+        provider = (settings.ingestion_provider or PROVIDER_GEMINI).strip().lower()
+        if provider not in (PROVIDER_GEMINI, PROVIDER_OPEN_SOURCE):
+            raise RuntimeError(
+                f"INGESTION_PROVIDER inválido: {settings.ingestion_provider}. Use gemini ou open_source"
+            )
+
+        if provider == PROVIDER_GEMINI:
+            _job_progress[job_id]["status"] = "uploading_to_gemini"
+            _job_progress[job_id]["updated_at"] = time.time()
+            logger.info("Uploading PDF to Gemini File API...")
+            uploaded_file = upload_pdf_to_gemini(pdf_path)
+        else:
+            _job_progress[job_id]["status"] = "preparing_open_source"
+            _job_progress[job_id]["updated_at"] = time.time()
+            logger.info(
+                "Using open-source extraction provider via Ollama model %s",
+                settings.ollama_model,
+            )
 
         _job_progress[job_id]["status"] = "processing_pages"
         _job_progress[job_id]["updated_at"] = time.time()
@@ -122,53 +143,43 @@ async def process_document(
 
         pages_to_process = [p for p in range(1, total + 1) if p not in completed_pages]
 
-        concurrency = max(1, min(settings.ingestion_concurrency, 2))
-        semaphore = asyncio.Semaphore(concurrency)
+        for page_number in pages_to_process:
+            try:
+                logger.info(f"Processing page {page_number}/{total} of {doc.original_filename}")
 
-        async def process_one_page(page_number: int) -> dict:
-            async with semaphore:
-                try:
-                    logger.info(f"Processing page {page_number}/{total} of {doc.original_filename}")
-
-                    # Gemini reads directly from uploaded PDF — no image conversion!
+                if provider == PROVIDER_GEMINI:
                     text, quality_score = await extract_page_from_pdf(
                         uploaded_file,
                         page_number,
                         pdf_path=pdf_path,
                     )
-
-                    # Store in Qdrant
-                    embedding_id = upsert_page(
-                        brand_slug=brand_slug,
-                        doc_id=doc_id,
-                        doc_filename=doc.original_filename,
+                else:
+                    text, quality_score = await extract_page_open_source(
+                        pdf_path=pdf_path,
                         page_number=page_number,
-                        text=text,
                     )
 
-                    return {
-                        "ok": True,
-                        "page_number": page_number,
-                        "text": text,
-                        "embedding_id": embedding_id,
-                        "quality_score": quality_score,
-                    }
-                except Exception as e:
-                    return {
-                        "ok": False,
-                        "page_number": page_number,
-                        "error": str(e),
-                    }
-
-        tasks = [asyncio.create_task(process_one_page(page_number)) for page_number in pages_to_process]
-
-        for task in asyncio.as_completed(tasks):
-            result = await task
-            page_number = result["page_number"]
-
-            if not result["ok"]:
+                embedding_id = upsert_page(
+                    brand_slug=brand_slug,
+                    doc_id=doc_id,
+                    doc_filename=doc.original_filename,
+                    page_number=page_number,
+                    text=text,
+                )
+            except GeminiQuotaExceededError as quota_error:
                 await db.rollback()
-                error_msg = f"Page {page_number}: {result['error']}"
+                error_msg = (
+                    "Limite da API Gemini excedido (429 RESOURCE_EXHAUSTED). "
+                    "Aguarde alguns minutos ou use uma chave com mais quota e tente novamente."
+                )
+                logger.error(f"Page {page_number}: {quota_error}")
+                errors.append(error_msg)
+                _job_progress[job_id]["errors"] = errors
+                _job_progress[job_id]["updated_at"] = time.time()
+                break
+            except Exception as e:
+                await db.rollback()
+                error_msg = f"Page {page_number}: {e}"
                 logger.error(error_msg)
                 errors.append(error_msg)
                 _job_progress[job_id]["errors"] = errors
@@ -177,17 +188,17 @@ async def process_document(
 
             page_obj = existing_pages.get(page_number)
             if page_obj:
-                page_obj.gemini_text = result["text"]
-                page_obj.embedding_id = result["embedding_id"]
-                page_obj.quality_score = result["quality_score"]
+                page_obj.gemini_text = text
+                page_obj.embedding_id = embedding_id
+                page_obj.quality_score = quality_score
                 page_obj.processed_at = datetime.utcnow()
             else:
                 page_obj = Page(
                     document_id=doc_id,
                     page_number=page_number,
-                    gemini_text=result["text"],
-                    embedding_id=result["embedding_id"],
-                    quality_score=result["quality_score"],
+                    gemini_text=text,
+                    embedding_id=embedding_id,
+                    quality_score=quality_score,
                     processed_at=datetime.utcnow(),
                 )
                 db.add(page_obj)
@@ -205,6 +216,15 @@ async def process_document(
                 _job_progress[job_id]["eta_seconds"] = int(max(0, (total - processed) / max(rate, 1e-6)))
             else:
                 _job_progress[job_id]["eta_seconds"] = 0
+
+            page_delay = max(0.0, float(settings.ingestion_page_delay_seconds or 0.0))
+            if page_delay > 0 and page_number != pages_to_process[-1]:
+                logger.info("Page delay enabled: sleeping %.2fs", page_delay)
+                _job_progress[job_id]["status"] = "cooldown_between_pages"
+                _job_progress[job_id]["updated_at"] = time.time()
+                await asyncio.sleep(page_delay)
+                _job_progress[job_id]["status"] = "processing_pages"
+                _job_progress[job_id]["updated_at"] = time.time()
 
         # Final status
         if errors and processed == 0:
