@@ -15,7 +15,7 @@ from agent.chat import chat
 from config import get_settings
 from database import get_db, AsyncSessionLocal
 from ingestion.processor import process_document, get_job_progress
-from models import Brand, Document, Page, User
+from models import Agent, Brand, Document, Page, User
 
 
 router = APIRouter(prefix="/api", tags=["rag-compat"])
@@ -43,6 +43,19 @@ class CompatBrandUpdate(BaseModel):
 class DuplicateCheckRequest(BaseModel):
     fileNames: list[str]
     brandId: Optional[str] = None
+
+
+class AgentUpsertRequest(BaseModel):
+    id: str
+    name: str
+    role: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    system_instruction: Optional[str] = None
+    brand_id: Optional[str] = None
+    is_custom: Optional[bool] = True
+    created_by: Optional[str] = None
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -223,6 +236,96 @@ async def compat_check_duplicates(payload: DuplicateCheckRequest, db: AsyncSessi
             duplicates.append(original_name)
 
     return {"duplicates": sorted(set(duplicates), key=str.lower)}
+
+
+@router.get("/agents")
+async def compat_list_agents(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Agent).order_by(Agent.name))
+    agents = result.scalars().all()
+
+    output = []
+    for agent in agents:
+        brand_name = None
+        if agent.brand_id:
+            brand_result = await db.execute(select(Brand).where(Brand.id == agent.brand_id))
+            brand = brand_result.scalar_one_or_none()
+            brand_name = brand.name if brand else None
+
+        output.append(
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "role": agent.role,
+                "description": agent.description,
+                "icon": agent.icon,
+                "color": agent.color,
+                "system_instruction": agent.system_instruction,
+                "is_custom": bool(agent.is_custom),
+                "created_by": str(agent.created_by) if agent.created_by is not None else None,
+                "brand_id": str(agent.brand_id) if agent.brand_id is not None else None,
+                "brands": {"name": brand_name} if brand_name else None,
+            }
+        )
+
+    return output
+
+
+@router.post("/agents")
+async def compat_upsert_agent(payload: AgentUpsertRequest, db: AsyncSession = Depends(get_db)):
+    agent_id = (payload.id or "").strip()
+    name = (payload.name or "").strip()
+    if not agent_id:
+        raise HTTPException(status_code=400, detail="ID do agente é obrigatório")
+    if not name:
+        raise HTTPException(status_code=400, detail="Nome do agente é obrigatório")
+
+    brand_id_int = int(payload.brand_id) if payload.brand_id and str(payload.brand_id).isdigit() else None
+    created_by_int = int(payload.created_by) if payload.created_by and str(payload.created_by).isdigit() else None
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+
+    if not agent:
+        agent = Agent(id=agent_id)
+        db.add(agent)
+
+    agent.name = name
+    agent.role = payload.role
+    agent.description = payload.description
+    agent.icon = payload.icon
+    agent.color = payload.color
+    agent.system_instruction = payload.system_instruction
+    agent.brand_id = brand_id_int
+    agent.is_custom = bool(payload.is_custom)
+    agent.created_by = created_by_int
+
+    await db.commit()
+    await db.refresh(agent)
+
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "role": agent.role,
+        "description": agent.description,
+        "icon": agent.icon,
+        "color": agent.color,
+        "system_instruction": agent.system_instruction,
+        "brand_id": str(agent.brand_id) if agent.brand_id is not None else None,
+        "is_custom": bool(agent.is_custom),
+        "created_by": str(agent.created_by) if agent.created_by is not None else None,
+    }
+
+
+@router.delete("/agents/{agent_id}")
+async def compat_delete_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        return {"ok": True}
+
+    await db.delete(agent)
+    await db.commit()
+    return {"ok": True}
 
 
 async def _run_ingestion_bg(doc_id: int, brand_slug: str, job_id: str):

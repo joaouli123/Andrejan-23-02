@@ -1,5 +1,6 @@
 ﻿import { ChatSession, Message, UserProfile, Agent, DEFAULT_AGENTS, Brand, Model } from '../types';
 import { supabase } from './supabase';
+import { ragHeaders, ragUrl } from './ragApi';
 
 // Storage service for local data management
 const CHATS_KEY = 'elevex_chats';
@@ -657,24 +658,18 @@ export const syncAgentsFromDatabase = async (): Promise<Agent[]> => {
     agentsSyncPromise = (async () => {
     try {
         clearLegacyAgentLocalData();
-        const user = getUserProfile();
 
-        const { data, error } = await supabase
-            .from('agents')
-            .select('id,name,role,description,icon,color,system_instruction,is_custom,created_by,brand_id,brands(name)')
-            .order('name');
-
-        if (error || !data) {
+        const response = await fetch(ragUrl('/api/agents'));
+        if (!response.ok) {
             return runtimeAgents;
         }
 
+        const data = await response.json();
+        if (!Array.isArray(data)) return runtimeAgents;
+
         const allAgents = (data as SupabaseAgentRow[]).map(mapSupabaseAgentToApp);
 
-        // Padrão + custom do usuário logado
-        const filtered = allAgents.filter(a => {
-            if (isBlockedLegacyAgent(a)) return false;
-            return !a.isCustom || (user && a.createdBy === user.id);
-        });
+        const filtered = allAgents.filter(a => !isBlockedLegacyAgent(a));
         setAgentsCache(filtered);
         lastAgentsSyncAt = Date.now();
         return filtered;
@@ -694,16 +689,23 @@ export const saveAgentToDatabase = async (agent: Agent): Promise<Agent> => {
     }
 
     const user = getUserProfile();
+    if (!user?.isAdmin) {
+        throw new Error('Somente admin pode criar/editar agentes globais');
+    }
 
     // Resolve brand_id pela brandName (quando informado)
     let brandId: string | null = null;
     if (agent.brandName) {
-        const { data: brand } = await supabase
-            .from('brands')
-            .select('id')
-            .eq('name', agent.brandName)
-            .maybeSingle();
-        brandId = brand?.id || null;
+        try {
+            const brandsResponse = await fetch(ragUrl('/api/brands'));
+            const brandsData = brandsResponse.ok ? await brandsResponse.json() : [];
+            const matched = Array.isArray(brandsData)
+                ? brandsData.find((b: any) => String(b?.name || '').toLowerCase() === String(agent.brandName || '').toLowerCase())
+                : null;
+            brandId = matched?.id || null;
+        } catch {
+            brandId = null;
+        }
     }
 
     const payload = {
@@ -719,9 +721,18 @@ export const saveAgentToDatabase = async (agent: Agent): Promise<Agent> => {
         created_by: user?.id || agent.createdBy || null,
     };
 
-    const { error } = await supabase.from('agents').upsert([payload]);
-    if (error) {
-        throw new Error(error.message || 'Falha ao salvar agente no banco');
+    const response = await fetch(ragUrl('/api/agents'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...ragHeaders(true),
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Falha ao salvar agente no banco');
     }
 
     await syncAgentsFromDatabase();
@@ -731,12 +742,20 @@ export const saveAgentToDatabase = async (agent: Agent): Promise<Agent> => {
 export const deleteAgentFromDatabase = async (agentId: string): Promise<void> => {
     try {
         const user = getUserProfile();
-        let query = supabase.from('agents').delete().eq('id', agentId);
-        if (user?.id) query = query.eq('created_by', user.id);
+        if (!user?.isAdmin) {
+            throw new Error('Somente admin pode excluir agentes globais');
+        }
 
-        const { error } = await query;
-        if (error) {
-            throw new Error(error.message || 'Falha ao excluir agente no banco');
+        const response = await fetch(ragUrl(`/api/agents/${encodeURIComponent(agentId)}`), {
+            method: 'DELETE',
+            headers: {
+                ...ragHeaders(true),
+            },
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || 'Falha ao excluir agente no banco');
         }
 
         await syncAgentsFromDatabase();

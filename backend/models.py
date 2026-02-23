@@ -79,6 +79,24 @@ class Page(Base):
     document = relationship("Document", back_populates="pages")
 
 
+class Agent(Base):
+    __tablename__ = "agents"
+
+    id = Column(String(255), primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    role = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    icon = Column(String(100), nullable=True)
+    color = Column(String(100), nullable=True)
+    system_instruction = Column(Text, nullable=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=True)
+    is_custom = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    brand = relationship("Brand")
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
