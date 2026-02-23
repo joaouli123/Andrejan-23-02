@@ -1,4 +1,5 @@
 type Row = Record<string, any>;
+import { ragUrl } from './ragApi';
 
 type QueryResult<T> = { data: T | null; error: { message: string } | null };
 
@@ -76,7 +77,7 @@ const mapBackendBrand = (row: any) => ({
 const backendBrands = {
   async select(): Promise<QueryResult<any[]>> {
     try {
-      const res = await fetch('/api/brands');
+      const res = await fetch(ragUrl('/api/brands'));
       if (!res.ok) return { data: [], error: null };
       const data = await res.json();
       return { data: (data || []).map(mapBackendBrand), error: null };
@@ -90,7 +91,7 @@ const backendBrands = {
       for (const row of rows || []) {
         const name = String(row?.name || '').trim();
         if (!name) continue;
-        const res = await fetch('/api/brands', {
+        const res = await fetch(ragUrl('/api/brands'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name }),
@@ -108,7 +109,7 @@ const backendBrands = {
   },
   async update(id: string, values: Row): Promise<QueryResult<any[]>> {
     try {
-      const res = await fetch(`/api/brands/${encodeURIComponent(String(id))}`, {
+      const res = await fetch(ragUrl(`/api/brands/${encodeURIComponent(String(id))}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values || {}),
@@ -125,7 +126,7 @@ const backendBrands = {
   },
   async delete(id: string): Promise<QueryResult<any[]>> {
     try {
-      const res = await fetch(`/api/brands/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+      const res = await fetch(ragUrl(`/api/brands/${encodeURIComponent(String(id))}`), { method: 'DELETE' });
       if (!res.ok) {
         const text = await res.text();
         return { data: null, error: { message: text || `Falha ao excluir marca (${res.status})` } };

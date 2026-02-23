@@ -3,9 +3,18 @@
  * Centralizes server URL and authentication for all RAG API calls
  */
 
+function inferDefaultServerUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname.toLowerCase();
+  if (host.endsWith('uxcodedev.com.br')) {
+    return 'https://api.uxcodedev.com.br';
+  }
+  return '';
+}
+
 // Pode ser URL absoluta (ex.: http://localhost:3002 ou https://elevex...)
 // Se vazio, usa fetch relativo (/api/...) para funcionar com mesmo domínio/proxy
-export const RAG_SERVER_URL = (process.env.RAG_SERVER_URL || '').trim().replace(/\/+$/, '');
+export const RAG_SERVER_URL = ((process.env.RAG_SERVER_URL || '').trim() || inferDefaultServerUrl()).replace(/\/+$/, '');
 
 /**
  * Build full API URL - handles empty RAG_SERVER_URL (relative paths)
