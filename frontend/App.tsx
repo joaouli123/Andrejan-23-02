@@ -3,7 +3,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Hero from './components/Hero';
 import Features from './components/Features';
-import Pricing, { Plan, PLANS } from './components/Pricing';
+import Pricing, { Plan } from './components/Pricing';
 import FAQ from './components/FAQ';
 import Dashboard from './components/Dashboard';
 import TargetAudience from './components/TargetAudience';
@@ -46,6 +46,11 @@ const App: React.FC = () => {
   const [registrationData, setRegistrationData] = useState<any>(null);
   const [paymentStatus, setPaymentStatus] = useState<'approved' | 'pending' | 'rejected'>('pending');
   const [paymentId, setPaymentId] = useState<string | undefined>(undefined);
+
+  const getAvailablePlans = useCallback(() => {
+    const plans = Storage.getPublicPlans();
+    return Array.isArray(plans) ? plans : [];
+  }, []);
 
   /** Navigate to a view and update the browser URL */
   const navigateTo = useCallback((v: ViewState, replace = false) => {
@@ -97,7 +102,7 @@ const App: React.FC = () => {
     const user = Storage.getUserProfile();
     if (user) {
       if (user.status === 'pending_payment') {
-        const plan = PLANS.find(p => p.name === user.plan);
+        const plan = getAvailablePlans().find(p => p.name === user.plan);
         if (plan) {
           setSelectedPlan(plan);
           setRegistrationData({ name: user.name, email: user.email });
@@ -120,7 +125,7 @@ const App: React.FC = () => {
     } else {
       navigateTo('landing', true);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getAvailablePlans, navigateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Handle browser back/forward ── */
   useEffect(() => {
@@ -138,7 +143,7 @@ const App: React.FC = () => {
   const navigateToApp = () => {
     const user = Storage.getUserProfile();
     if (user && user.status === 'pending_payment') {
-      const plan = PLANS.find(p => p.name === user.plan);
+      const plan = getAvailablePlans().find(p => p.name === user.plan);
       if (plan) {
         setSelectedPlan(plan);
         setRegistrationData({ name: user.name, email: user.email });

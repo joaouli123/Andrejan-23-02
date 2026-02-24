@@ -85,6 +85,8 @@ export interface UserProfile {
   status: 'active' | 'inactive' | 'overdue' | 'pending_payment';
   joinedAt: string;
   nextBillingDate: string;
+  paymentMethod?: 'PIX' | 'Cartão' | 'Boleto' | 'Não informado';
+  paymentLast4?: string;
   tokenUsage: {
     currentMonth: number;
     lastMonth: number;

@@ -25,6 +25,7 @@ import {
   ProfileView, 
   AdminOverview, 
   AdminUsers, 
+  AdminPlans,
   UsageView 
 } from './DashboardViews';
 import AdminDashboard from './admin/AdminDashboard';
@@ -34,7 +35,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type View = 'agents' | 'chat' | 'financial' | 'usage' | 'profile' | 'admin' | 'admin_brands_models' | 'admin_users' | 'agent_builder';
+type View = 'agents' | 'chat' | 'financial' | 'usage' | 'profile' | 'admin' | 'admin_brands_models' | 'admin_users' | 'admin_plans' | 'agent_builder';
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<View>('agents');
@@ -196,6 +197,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <>
                  <SidebarSection title="Administração" />
                  <SidebarItem view="admin" icon={PieChart} label="Visão Geral" />
+                 <SidebarItem view="admin_plans" icon={CreditCard} label="Config. de Planos" />
                  <SidebarItem view="admin_brands_models" icon={Database} label="Marcas & Agentes" />
                  <SidebarItem view="admin_users" icon={Users} label="Usuários & Planos" />
               </>
@@ -270,6 +272,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
           {/* Admin Views */}
           {currentView === 'admin' && user.isAdmin && <AdminOverview />}
+          {currentView === 'admin_plans' && user.isAdmin && <AdminPlans />}
           {currentView === 'admin_brands_models' && user.isAdmin && (
             <div className="h-full overflow-y-auto bg-slate-50">
               <AdminDashboard />

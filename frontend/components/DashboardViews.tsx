@@ -6,7 +6,8 @@ import {
     Trash2, MessageSquare, Clock, ArrowRight, Shield, CreditCard, 
     Download, Zap, CheckCircle2, Edit2, Archive, MoreVertical, 
     X, Check, AlertCircle, Users, TrendingUp, DollarSign, Activity, Calendar,
-    PieChart, BrainCircuit, Rocket, ChevronDown, ChevronRight, Upload, MapPin, Lock, User
+  PieChart, BrainCircuit, Rocket, ChevronDown, ChevronRight, Upload, MapPin, Lock, User,
+  Settings2, Save, Wallet, LineChart
 } from 'lucide-react';
 import * as Storage from '../services/storage';
 
@@ -307,8 +308,10 @@ export const HistoryView: React.FC<{
 export const FinancialView: React.FC<{ user: UserProfile }> = ({ user }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const planPrice = user.plan === 'Profissional' ? 'R$ 19,99' : user.plan === 'Iniciante' ? 'R$ 9,99' : user.plan === 'Empresa' ? 'R$ 99,99' : 'Grátis';
-  const planPriceNum = user.plan === 'Profissional' ? 19.99 : user.plan === 'Iniciante' ? 9.99 : user.plan === 'Empresa' ? 99.99 : 0;
+  const planPriceNum = Storage.getPlanPrice(user.plan);
+  const planPrice = planPriceNum > 0
+    ? `R$ ${planPriceNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : 'Grátis';
 
   // Mock payment history
   const paymentHistory = [
@@ -830,8 +833,14 @@ export const AdminOverview: React.FC = () => {
       totalQueries: 0,
       revenueChange: 0,
       queriesChange: 0,
+      totalRevenue: 0,
+      overdueUsers: 0,
+      pendingUsers: 0,
       planDistribution: [] as Array<{ plan: string; count: number; percent: number }>,
       topAgents: [] as Array<{ agentName: string; queries: number }>,
+      paymentMethodsUsage: [] as Array<{ method: string; value: number }>,
+      salesSeries: [] as Array<{ label: string; value: number }>,
+      usersSeries: [] as Array<{ label: string; value: number }>,
     });
     const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
     const [loading, setLoading] = useState(false);
@@ -846,8 +855,14 @@ export const AdminOverview: React.FC = () => {
         totalQueries: 0,
         revenueChange: 0,
         queriesChange: 0,
+        totalRevenue: 0,
+        overdueUsers: 0,
+        pendingUsers: 0,
         planDistribution: [],
         topAgents: [],
+        paymentMethodsUsage: [],
+        salesSeries: [],
+        usersSeries: [],
       };
     }
 
@@ -872,8 +887,14 @@ export const AdminOverview: React.FC = () => {
       totalQueries: Number(raw.totalQueries ?? 0),
       revenueChange: Number(raw.revenueChange ?? 0),
       queriesChange: Number(raw.queriesChange ?? 0),
+      totalRevenue: Number(raw.totalRevenue ?? 0),
+      overdueUsers: Number(raw.overdueUsers ?? 0),
+      pendingUsers: Number(raw.pendingUsers ?? 0),
       planDistribution: Array.isArray(raw.planDistribution) ? raw.planDistribution : [],
       topAgents: Array.isArray(raw.topAgents) ? raw.topAgents : [],
+      paymentMethodsUsage: Array.isArray(raw.paymentMethodsUsage) ? raw.paymentMethodsUsage : [],
+      salesSeries: Array.isArray(raw.salesSeries) ? raw.salesSeries : [],
+      usersSeries: Array.isArray(raw.usersSeries) ? raw.usersSeries : [],
     };
   };
     
@@ -902,6 +923,10 @@ export const AdminOverview: React.FC = () => {
       Iniciante: 'bg-amber-500',
       Free: 'bg-slate-400',
     };
+
+    const formatCurrency = (value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const maxSales = Math.max(1, ...metrics.salesSeries.map(point => point.value));
+    const maxUsers = Math.max(1, ...metrics.usersSeries.map(point => point.value));
 
     return (
         <div className="h-full overflow-y-auto p-6 lg:p-12 bg-slate-50">
@@ -985,7 +1010,7 @@ export const AdminOverview: React.FC = () => {
                 </div>
 
                 {/* Charts Area */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                             <PieChart size={18} className="text-blue-600" /> Distribuição por Plano
@@ -1022,174 +1047,346 @@ export const AdminOverview: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-6 rounded-xl text-white">
-                    <h3 className="font-bold text-lg mb-2">Sistema em Crescimento 🚀</h3>
-                  <p className="text-blue-50 text-sm mb-4">No período selecionado: {metrics.totalUsers} usuários totais, {metrics.activeUsers} ativos e R$ {metrics.mrr} de MRR.</p>
-                    <div className="flex gap-3">
-                        <button className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-50 transition-colors">
-                            Ver Relatório Completo
-                        </button>
-                        <button className="bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-800 transition-colors">
-                            Exportar Dados
-                        </button>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Wallet size={18} className="text-blue-600" /> Meios de Pagamento Mais Usados
+                        </h3>
+                        <div className="space-y-3">
+                          {metrics.paymentMethodsUsage.length > 0 ? metrics.paymentMethodsUsage.map(method => (
+                            <div key={method.method} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                              <span className="text-sm font-medium text-slate-700">{method.method}</span>
+                              <span className="text-sm font-bold text-slate-900">{formatCurrency(method.value)}</span>
+                            </div>
+                          )) : (
+                            <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-500">Sem pagamentos registrados no período.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-2">
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <LineChart size={18} className="text-blue-600" /> Evolução de Vendas no Período
+                        </h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                          {metrics.salesSeries.map(point => (
+                            <div key={`sales-${point.label}`} className="bg-slate-50 rounded-lg p-3">
+                              <div className="h-20 flex items-end">
+                                <div className="w-full bg-blue-500/80 rounded-t" style={{ height: `${(point.value / maxSales) * 100}%`, minHeight: '6px' }}></div>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-2">{point.label}</p>
+                              <p className="text-xs font-bold text-slate-800">{formatCurrency(point.value)}</p>
+                            </div>
+                          ))}
+                        </div>
                     </div>
                 </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Receita Total (ativa)</p>
+                        <p className="text-3xl font-bold text-slate-900">{formatCurrency(metrics.totalRevenue)}</p>
+                      </div>
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Usuários em Atraso</p>
+                        <p className="text-3xl font-bold text-red-600">{metrics.overdueUsers}</p>
+                      </div>
+                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pendentes de Pagamento</p>
+                        <p className="text-3xl font-bold text-amber-600">{metrics.pendingUsers}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-10">
+                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Users size={18} className="text-blue-600" /> Novos Usuários por Período
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {metrics.usersSeries.map(point => (
+                          <div key={`users-${point.label}`} className="bg-slate-50 rounded-lg p-3">
+                            <div className="h-20 flex items-end">
+                              <div className="w-full bg-emerald-500/80 rounded-t" style={{ height: `${(point.value / maxUsers) * 100}%`, minHeight: '6px' }}></div>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-2">{point.label}</p>
+                            <p className="text-xs font-bold text-slate-800">{point.value.toLocaleString('pt-BR')} usuários</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
             </div>
         </div>
     );
 };
 
-export const AdminUsers: React.FC = () => {
-    const [users, setUsers] = useState<UserProfile[]>([]);
-    
-    useEffect(() => {
-        setUsers(Storage.getAdminUsers());
-    }, []);
+export const AdminPlans: React.FC = () => {
+  const [plans, setPlans] = useState(Storage.getPlanSettings());
 
-    const handleToggleStatus = (userId: string, currentStatus: string) => {
-        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-        const updatedUsers = Storage.toggleUserStatus(userId, newStatus);
-        setUsers(updatedUsers);
-    };
+  const handleField = (id: string, field: keyof Storage.PlanSetting, value: any) => {
+    setPlans(prev => prev.map(plan => {
+      if (plan.id !== id) return plan;
+      return { ...plan, [field]: value };
+    }));
+  };
 
-    return (
-        <div className="h-full overflow-y-auto p-6 lg:p-12 bg-slate-50">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-6 sm:mb-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Usuários & Planos</h1>
-                        <p className="text-slate-500 mt-1 text-sm sm:text-base">Gerencie acessos, assinaturas e permissões dos clientes.</p>
-                    </div>
-                    <button className="bg-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 text-sm sm:text-base w-fit">
-                        <Users size={18} /> Novo Usuário
-                    </button>
-                </div>
+  const handleFeatures = (id: string, value: string) => {
+    const features = value.split('\n').map(item => item.trim()).filter(Boolean);
+    handleField(id, 'features', features);
+  };
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total de Usuários</p>
-                        <p className="text-2xl font-bold text-slate-900">{users.length}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Plano Empresa</p>
-                        <p className="text-2xl font-bold text-blue-600">{users.filter(u => u.plan === 'Empresa').length}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Plano Profissional</p>
-                        <p className="text-2xl font-bold text-emerald-600">{users.filter(u => u.plan === 'Profissional').length}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Inativos</p>
-                        <p className="text-2xl font-bold text-red-600">{users.filter(u => u.status === 'inactive').length}</p>
-                    </div>
-                </div>
+  const handleSave = () => {
+    const saved = Storage.savePlanSettings(plans);
+    setPlans(saved);
+    alert('Planos atualizados com sucesso.');
+  };
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50/50">
-                        <h3 className="font-bold text-slate-800">Todos os Usuários</h3>
-                        <div className="flex gap-2">
-                            <input 
-                                type="search" 
-                                placeholder="Buscar usuário..." 
-                                className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                            <button className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center transition-colors px-3 py-1.5 bg-blue-50 rounded-lg hover:bg-blue-100">
-                                <Download size={16} className="mr-1" /> Exportar
-                            </button>
-                        </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-100">
-                            <thead className="bg-slate-50/50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Usuário / Empresa</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Plano</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Consumo</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Membro Desde</th>
-                                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>
-                            </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                            {users.map((u) => (
-                                <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm mr-3 shadow-sm">
-                                            {u.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-semibold text-slate-900">{u.name}</div>
-                                            <div className="text-xs text-slate-500">{u.email}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${
-                                        u.plan === 'Empresa' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                                        u.plan === 'Profissional' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                                        'bg-slate-100 text-slate-600 border-slate-200'
-                                    }`}>
-                                        {u.plan}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 bg-slate-100 rounded-full h-2 w-20">
-                                            <div 
-                                                className={`h-2 rounded-full ${
-                                                    u.creditsLimit === 'Infinity' ? 'bg-green-500' :
-                                                    (u.creditsUsed / Number(u.creditsLimit)) > 0.8 ? 'bg-red-500' :
-                                                    (u.creditsUsed / Number(u.creditsLimit)) > 0.5 ? 'bg-amber-500' :
-                                                    'bg-blue-500'
-                                                }`}
-                                                style={{ 
-                                                    width: u.creditsLimit === 'Infinity' ? '100%' : `${(u.creditsUsed / Number(u.creditsLimit)) * 100}%` 
-                                                }}
-                                            />
-                                        </div>
-                                        <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
-                                            {u.creditsLimit === 'Infinity' ? 'Ilimitado' : `${u.creditsUsed}/${u.creditsLimit}`}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                        u.status === 'active' ? 'bg-green-100 text-green-700' : 
-                                        u.status === 'overdue' ? 'bg-red-100 text-red-700' :
-                                        'bg-slate-100 text-slate-500'
-                                    }`}>
-                                        {u.status === 'active' ? 'Ativo' : u.status === 'overdue' ? 'Em Atraso' : 'Inativo'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                    {new Date(u.joinedAt).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    {u.id !== 'u_123' && (
-                                        <button 
-                                            onClick={() => handleToggleStatus(u.id, u.status)}
-                                            className={`text-xs font-bold px-3 py-1.5 rounded-md transition-colors ${
-                                                u.status === 'active' 
-                                                ? 'text-red-600 bg-red-50 hover:bg-red-100' 
-                                                : 'text-green-600 bg-green-50 hover:bg-green-100'
-                                            }`}
-                                        >
-                                            {u.status === 'active' ? 'Desativar' : 'Ativar'}
-                                        </button>
-                                    )}
-                                </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="h-full overflow-y-auto p-6 lg:p-12 bg-slate-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Configuração de Planos</h1>
+            <p className="text-slate-500 mt-1 text-sm sm:text-base">Ajuste preço, limites e recursos dos planos e aplique no sistema.</p>
+          </div>
+          <button onClick={handleSave} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+            <Save size={16} /> Salvar Configurações
+          </button>
         </div>
-    );
+
+        <div className="space-y-5">
+          {plans.map(plan => (
+            <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Settings2 size={16} className="text-blue-600" />
+                <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Preço (R$)</label>
+                  <input type="number" min="0" step="0.01" value={plan.price} onChange={e => handleField(plan.id, 'price', Number(e.target.value || 0))} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Consultas/24h</label>
+                  <input type="text" value={String(plan.queriesLimitPer24h)} onChange={e => handleField(plan.id, 'queriesLimitPer24h', e.target.value.toLowerCase() === 'infinity' ? 'Infinity' : Math.max(0, Number(e.target.value || 0)))} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Dispositivos</label>
+                  <input type="number" min="1" step="1" value={plan.devicesLimit} onChange={e => handleField(plan.id, 'devicesLimit', Math.max(1, Number(e.target.value || 1)))} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Período</label>
+                  <input type="text" value={plan.period} onChange={e => handleField(plan.id, 'period', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Recursos (1 por linha)</label>
+                <textarea value={plan.features.join('\n')} onChange={e => handleFeatures(plan.id, e.target.value)} rows={4} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const AdminUsers: React.FC = () => {
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [search, setSearch] = useState('');
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [detailsUser, setDetailsUser] = useState<UserProfile | null>(null);
+  const [editData, setEditData] = useState<Partial<UserProfile>>({});
+
+  useEffect(() => {
+    setUsers(Storage.getAdminUsers());
+  }, []);
+
+  const refreshUsers = () => {
+    setUsers(Storage.getAdminUsers());
+  };
+
+  const handleToggleStatus = (user: UserProfile) => {
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    Storage.toggleUserStatus(user.id, newStatus);
+    refreshUsers();
+    setActiveMenuId(null);
+  };
+
+  const openDetails = (user: UserProfile) => {
+    setDetailsUser(user);
+    setEditData({
+      name: user.name,
+      email: user.email,
+      company: user.company,
+      plan: user.plan,
+      status: user.status,
+      nextBillingDate: user.nextBillingDate,
+      paymentMethod: user.paymentMethod || 'Não informado',
+    });
+    setActiveMenuId(null);
+  };
+
+  const saveDetails = () => {
+    if (!detailsUser) return;
+    Storage.updateAdminUser(detailsUser.id, editData);
+    refreshUsers();
+    setDetailsUser(null);
+  };
+
+  const filteredUsers = users.filter(user => `${user.name} ${user.email} ${user.company}`.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="h-full overflow-y-auto p-6 lg:p-12 bg-slate-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 sm:mb-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Usuários & Planos</h1>
+            <p className="text-slate-500 mt-1 text-sm sm:text-base">Gerencie acessos, assinaturas e permissões dos clientes.</p>
+          </div>
+          <button className="bg-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2 text-sm sm:text-base w-fit">
+            <Users size={18} /> Novo Usuário
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total de Usuários</p>
+            <p className="text-2xl font-bold text-slate-900">{users.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Plano Empresa</p>
+            <p className="text-2xl font-bold text-blue-600">{users.filter(u => u.plan === 'Empresa').length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Plano Profissional</p>
+            <p className="text-2xl font-bold text-emerald-600">{users.filter(u => u.plan === 'Profissional').length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Inativos</p>
+            <p className="text-2xl font-bold text-red-600">{users.filter(u => u.status === 'inactive').length}</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50/50">
+            <h3 className="font-bold text-slate-800">Todos os Usuários</h3>
+            <div className="flex gap-2">
+              <input type="search" placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              <button className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center transition-colors px-3 py-1.5 bg-blue-50 rounded-lg hover:bg-blue-100">
+                <Download size={16} className="mr-1" /> Exportar
+              </button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50/50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Usuário / Empresa</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Plano</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Preço</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Consumo</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Vencimento</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Pagamento</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>
+              </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+              {filteredUsers.map((u) => {
+                const planPrice = Storage.getPlanPrice(u.plan);
+                const usagePercent = u.creditsLimit === 'Infinity' ? 100 : Math.min(100, (u.creditsUsed / Number(u.creditsLimit || 1)) * 100);
+                return (
+                <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm mr-3 shadow-sm">
+                      {u.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{u.name}</div>
+                      <div className="text-xs text-slate-500">{u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${
+                    u.plan === 'Empresa' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                    u.plan === 'Profissional' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                    'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>{u.plan}</span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-700">
+                  R$ {planPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-slate-100 rounded-full h-2 w-20">
+                      <div className={`h-2 rounded-full ${u.creditsLimit === 'Infinity' ? 'bg-green-500' : usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${usagePercent}%` }} />
+                    </div>
+                    <span className="text-xs text-slate-600 font-medium whitespace-nowrap">{u.creditsLimit === 'Infinity' ? 'Ilimitado' : `${u.creditsUsed}/${u.creditsLimit}`}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{new Date(u.nextBillingDate).toLocaleDateString('pt-BR')}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{u.paymentMethod || 'Não informado'}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${u.status === 'active' ? 'bg-green-100 text-green-700' : u.status === 'overdue' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {u.status === 'active' ? 'Ativo' : u.status === 'overdue' ? 'Em Atraso' : u.status === 'pending_payment' ? 'Pendente' : 'Inativo'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                  <button onClick={() => setActiveMenuId(activeMenuId === u.id ? null : u.id)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
+                    <MoreVertical size={16} />
+                  </button>
+                  {activeMenuId === u.id && (
+                    <div className="absolute right-6 top-12 w-44 bg-white border border-slate-200 shadow-xl rounded-lg z-20 py-1">
+                      <button onClick={() => handleToggleStatus(u)} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                        {u.status === 'active' ? 'Desativar usuário' : 'Ativar usuário'}
+                      </button>
+                      <button onClick={() => openDetails(u)} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Ver detalhes</button>
+                    </div>
+                  )}
+                </td>
+                </tr>
+              )})}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {detailsUser && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetailsUser(null)}>
+            <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Detalhes do Usuário</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input value={String(editData.name || '')} onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Nome" />
+                <input value={String(editData.email || '')} onChange={e => setEditData(prev => ({ ...prev, email: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Email" />
+                <input value={String(editData.company || '')} onChange={e => setEditData(prev => ({ ...prev, company: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Empresa" />
+                <select value={String(editData.plan || detailsUser.plan)} onChange={e => setEditData(prev => ({ ...prev, plan: e.target.value as UserProfile['plan'] }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg">
+                  <option value="Free">Free</option>
+                  <option value="Iniciante">Iniciante</option>
+                  <option value="Profissional">Profissional</option>
+                  <option value="Empresa">Empresa</option>
+                </select>
+                <input type="date" value={String(editData.nextBillingDate || detailsUser.nextBillingDate)} onChange={e => setEditData(prev => ({ ...prev, nextBillingDate: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+                <select value={String(editData.paymentMethod || detailsUser.paymentMethod || 'Não informado')} onChange={e => setEditData(prev => ({ ...prev, paymentMethod: e.target.value as UserProfile['paymentMethod'] }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg">
+                  <option value="Não informado">Não informado</option>
+                  <option value="PIX">PIX</option>
+                  <option value="Cartão">Cartão</option>
+                  <option value="Boleto">Boleto</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-5">
+                <button onClick={() => setDetailsUser(null)} className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg">Cancelar</button>
+                <button onClick={saveDetails} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export const AdminFinance: React.FC = () => {

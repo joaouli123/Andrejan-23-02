@@ -271,6 +271,7 @@ const Checkout: React.FC<CheckoutProps> = ({ plan, onBack, onPaymentComplete, in
       });
 
       if (result.status === 'approved') {
+        Storage.setCurrentUserPaymentInfo('Cartão');
         setSuccessPaymentId(result.paymentId);
         setShowSuccess(true);
         setTimeout(() => onPaymentComplete('approved', result.paymentId), 2500);
@@ -322,6 +323,7 @@ const Checkout: React.FC<CheckoutProps> = ({ plan, onBack, onPaymentComplete, in
           const v = await verifyMercadoPagoPayment(result.paymentId);
           if (v.status === 'approved') {
             if (pixPollRef.current) clearInterval(pixPollRef.current);
+            Storage.setCurrentUserPaymentInfo('PIX');
             setSuccessPaymentId(result.paymentId);
             setShowSuccess(true);
             setTimeout(() => onPaymentComplete('approved', result.paymentId), 2500);

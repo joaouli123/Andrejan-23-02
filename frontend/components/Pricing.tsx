@@ -1,5 +1,6 @@
-﻿import React from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
+import * as Storage from '../services/storage';
 
 export interface Plan {
   id: string;
@@ -60,6 +61,15 @@ interface PricingProps {
 }
 
 const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
+  const [plans, setPlans] = useState<Plan[]>(PLANS);
+
+  useEffect(() => {
+    const dynamicPlans = Storage.getPublicPlans();
+    if (Array.isArray(dynamicPlans) && dynamicPlans.length > 0) {
+      setPlans(dynamicPlans as Plan[]);
+    }
+  }, []);
+
   return (
     <div id='pricing' className='py-24 bg-white relative'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
@@ -69,7 +79,7 @@ const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
         </div>
 
         <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8'>
-          {PLANS.map((plan) => (
+          {plans.map((plan) => (
             <div
               key={plan.id}
               className={`relative flex flex-col p-8 rounded-2xl border-2 transition-all ${plan.popular ? 'border-blue-600 shadow-xl shadow-blue-50 bg-white scale-[1.03]' : 'border-slate-200 bg-white hover:shadow-lg'}`}
