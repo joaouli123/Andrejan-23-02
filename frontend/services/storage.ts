@@ -15,6 +15,8 @@ const CHATS_SYNC_MIN_INTERVAL_MS = 5000;
 const AGENTS_SYNC_MIN_INTERVAL_MS = 15000;
 const QUERY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+type FinancialMetricsPeriod = '7d' | '30d' | '90d' | '1y';
+
 let chatsSyncPromise: Promise<ChatSession[]> | null = null;
 let lastChatsSyncAt = 0;
 let agentsSyncPromise: Promise<Agent[]> | null = null;
@@ -37,6 +39,13 @@ const PLAN_QUOTA_POLICIES: Record<UserProfile['plan'], PlanQuotaPolicy> = {
     Iniciante: { limitPer24h: 5, devices: 1 },
     Profissional: { limitPer24h: 'Infinity', devices: 1 },
     Empresa: { limitPer24h: 'Infinity', devices: 5 },
+};
+
+const PLAN_MONTHLY_PRICE: Record<UserProfile['plan'], number> = {
+    Free: 0,
+    Iniciante: 9.99,
+    Profissional: 19.99,
+    Empresa: 99.99,
 };
 
 type SupabaseChatSessionRow = {
@@ -124,6 +133,63 @@ const normalizeProfileQuotaFields = (profile: UserProfile): UserProfile => {
         creditsLimit: policy.limitPer24h,
         creditsUsed: usageState.used,
     };
+};
+
+const ensureAdminUsersSeeded = (): UserProfile[] => {
+    const defaults = [ADMIN_PROFILE, USER_PROFILE].map(normalizeProfileQuotaFields);
+    try {
+        const raw = localStorage.getItem(ADMIN_USERS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const existing = Array.isArray(parsed)
+            ? parsed.filter((item): item is UserProfile => !!item && typeof item === 'object')
+            : [];
+
+        const byId = new Map<string, UserProfile>();
+        for (const user of existing) {
+            const normalized = normalizeProfileQuotaFields(user);
+            byId.set(normalized.id, normalized);
+        }
+        for (const user of defaults) {
+            if (!byId.has(user.id)) {
+                byId.set(user.id, user);
+            }
+        }
+
+        const merged = Array.from(byId.values());
+        localStorage.setItem(ADMIN_USERS_KEY, JSON.stringify(merged));
+        return merged;
+    } catch {
+        localStorage.setItem(ADMIN_USERS_KEY, JSON.stringify(defaults));
+        return defaults;
+    }
+};
+
+const upsertAdminUser = (profile: UserProfile): UserProfile[] => {
+    const users = ensureAdminUsersSeeded();
+    const index = users.findIndex(user => user.id === profile.id || user.email === profile.email);
+    const normalized = normalizeProfileQuotaFields(profile);
+    if (index >= 0) {
+        users[index] = normalized;
+    } else {
+        users.push(normalized);
+    }
+    localStorage.setItem(ADMIN_USERS_KEY, JSON.stringify(users));
+    return users;
+};
+
+const getPeriodRange = (period: FinancialMetricsPeriod) => {
+    const now = Date.now();
+    const days = period === '7d' ? 7 : period === '90d' ? 90 : period === '1y' ? 365 : 30;
+    const currentStart = now - (days * 24 * 60 * 60 * 1000);
+    const previousStart = currentStart - (days * 24 * 60 * 60 * 1000);
+    return { now, currentStart, previousStart };
+};
+
+const formatReais = (value: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number.isFinite(value) ? value : 0);
 };
 
 export type UserQueryQuotaStatus = {
@@ -227,6 +293,7 @@ export const applyPlanToCurrentUser = (plan: UserProfile['plan']) => {
     saveQueryUsageMap(usageMap);
 
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedUser));
+    upsertAdminUser(updatedUser);
     return updatedUser;
 };
 
@@ -402,29 +469,38 @@ const USER_PROFILE: UserProfile = {
 // --- AUTH ---
 
 export const login = (type: 'admin' | 'user'): UserProfile => {
-    const profile = type === 'admin' ? ADMIN_PROFILE : USER_PROFILE;
+    const users = ensureAdminUsersSeeded();
+    const fallback = type === 'admin' ? ADMIN_PROFILE : USER_PROFILE;
+    const profile = users.find(user => type === 'admin' ? !!user.isAdmin : !user.isAdmin) || fallback;
     const normalized = normalizeProfileQuotaFields(profile);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+    upsertAdminUser(normalized);
     return normalized;
 };
 
 export const signup = (data: Partial<UserProfile>): UserProfile => {
+    const requestedPlan = (['Free', 'Iniciante', 'Profissional', 'Empresa'] as const).includes(data.plan as UserProfile['plan'])
+        ? (data.plan as UserProfile['plan'])
+        : 'Free';
+    const requestedStatus = data.status || (requestedPlan === 'Free' ? 'active' : 'pending_payment');
+
     const newProfile: UserProfile = {
-        id: 'user_002',
+        id: `user_${Date.now()}`,
         name: data.name || 'Novo Usuário',
         company: data.company || 'Empresa',
         email: data.email || 'user@email.com',
-        plan: data.plan || 'Free',
+        plan: requestedPlan,
         creditsUsed: 0,
-        creditsLimit: 10,
+        creditsLimit: requestedPlan === 'Free' ? 1 : requestedPlan === 'Iniciante' ? 5 : 'Infinity',
         isAdmin: false,
-        status: 'pending_payment', // Default for new signups
+        status: requestedStatus,
         joinedAt: new Date().toISOString().split('T')[0],
         nextBillingDate: new Date().toISOString().split('T')[0],
         tokenUsage: { currentMonth: 0, lastMonth: 0, history: [] }
     };
     const normalized = normalizeProfileQuotaFields(newProfile);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+    upsertAdminUser(normalized);
     return normalized;
 };
 
@@ -433,6 +509,7 @@ export const updateUserProfile = (updates: Partial<UserProfile>) => {
     if (user) {
         const updated = normalizeProfileQuotaFields({ ...user, ...updates });
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updated));
+        upsertAdminUser(updated);
         return updated;
     }
     return null;
@@ -449,6 +526,7 @@ export const getUserProfile = (): UserProfile | null => {
         const parsed = JSON.parse(stored) as UserProfile;
         const normalized = normalizeProfileQuotaFields(parsed);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+        upsertAdminUser(normalized);
         return normalized;
     } catch {
         return null;
@@ -767,25 +845,12 @@ export const deleteAgentFromDatabase = async (agentId: string): Promise<void> =>
 // --- ADMIN ---
 
 export const getAdminUsers = (): UserProfile[] => {
-    // Mock data for admin users management
-    return [
-        ADMIN_PROFILE,
-        USER_PROFILE,
-        {
-            id: 'user_003',
-            name: 'Maria Silva',
-            company: 'Elevadores São Paulo',
-            email: 'maria@elevsp.com',
-            plan: 'Iniciante',
-            creditsUsed: 15,
-            creditsLimit: 100,
-            isAdmin: false,
-            status: 'active',
-            joinedAt: '2024-03-01',
-            nextBillingDate: '2024-07-01',
-            tokenUsage: { currentMonth: 3500, lastMonth: 2800, history: [2, 3, 3.5] }
-        }
-    ];
+    const users = ensureAdminUsersSeeded();
+    const current = getUserProfile();
+    if (current) {
+        return upsertAdminUser(current);
+    }
+    return users;
 };
 
 export const toggleUserStatus = (userId: string, newStatus: 'active' | 'inactive' | 'overdue' | 'pending_payment'): UserProfile[] => {
@@ -794,31 +859,108 @@ export const toggleUserStatus = (userId: string, newStatus: 'active' | 'inactive
     if (user) {
         user.status = newStatus;
     }
+    localStorage.setItem(ADMIN_USERS_KEY, JSON.stringify(users));
+    const current = getUserProfile();
+    if (current && current.id === userId) {
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ ...current, status: newStatus }));
+    }
     return users;
 };
 
-export const getFinancialMetrics = () => {
-    return {
-        revenue: {
-            current: 12450,
-            previous: 10890,
-            change: 14.3
-        },
-        activeUsers: {
-            current: 248,
-            previous: 221,
-            change: 12.2
-        },
-        avgTicket: {
-            current: 50.2,
-            previous: 49.3,
-            change: 1.8
-        },
-        churnRate: {
-            current: 2.4,
-            previous: 3.1,
-            change: -22.6
+export const getFinancialMetrics = (period: FinancialMetricsPeriod = '30d') => {
+    const users = getAdminUsers().filter(user => !user.isAdmin);
+    const chats = getChats();
+    const { now, currentStart, previousStart } = getPeriodRange(period);
+
+    const activeStatuses: UserProfile['status'][] = ['active'];
+    const activeUsers = users.filter(user => activeStatuses.includes(user.status)).length;
+    const totalUsers = users.length;
+
+    const currentRevenue = users
+        .filter(user => activeStatuses.includes(user.status))
+        .reduce((sum, user) => sum + PLAN_MONTHLY_PRICE[user.plan], 0);
+
+    const previousRevenue = users
+        .filter(user => {
+            const joined = new Date(user.joinedAt).getTime();
+            return joined <= currentStart && activeStatuses.includes(user.status);
+        })
+        .reduce((sum, user) => sum + PLAN_MONTHLY_PRICE[user.plan], 0);
+
+    const currentQueries = chats.reduce((sum, session) => {
+        if (!session.lastMessageAt) return sum;
+        const ts = new Date(session.lastMessageAt).getTime();
+        if (ts >= currentStart && ts <= now) {
+            const userMessages = Array.isArray(session.messages)
+                ? session.messages.filter(message => message.role === 'user').length
+                : 0;
+            return sum + Math.max(1, userMessages);
         }
+        return sum;
+    }, 0);
+
+    const previousQueries = chats.reduce((sum, session) => {
+        if (!session.lastMessageAt) return sum;
+        const ts = new Date(session.lastMessageAt).getTime();
+        if (ts >= previousStart && ts < currentStart) {
+            const userMessages = Array.isArray(session.messages)
+                ? session.messages.filter(message => message.role === 'user').length
+                : 0;
+            return sum + Math.max(1, userMessages);
+        }
+        return sum;
+    }, 0);
+
+    const deactivatedInPeriod = users.filter(user => {
+        const joined = new Date(user.joinedAt).getTime();
+        return user.status !== 'active' && joined >= currentStart && joined <= now;
+    }).length;
+
+    const churn = totalUsers > 0 ? (deactivatedInPeriod / totalUsers) * 100 : 0;
+    const revenueChange = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue) * 100 : (currentRevenue > 0 ? 100 : 0);
+    const queriesChange = previousQueries > 0 ? ((currentQueries - previousQueries) / previousQueries) * 100 : (currentQueries > 0 ? 100 : 0);
+
+    const planCounts: Record<UserProfile['plan'], number> = {
+        Empresa: users.filter(user => user.plan === 'Empresa').length,
+        Profissional: users.filter(user => user.plan === 'Profissional').length,
+        Iniciante: users.filter(user => user.plan === 'Iniciante').length,
+        Free: users.filter(user => user.plan === 'Free').length,
+    };
+
+    const planDistribution = (Object.entries(planCounts) as [UserProfile['plan'], number][]).map(([plan, count]) => ({
+        plan,
+        count,
+        percent: totalUsers > 0 ? Math.round((count / totalUsers) * 100) : 0,
+    }));
+
+    const usageByAgent = new Map<string, number>();
+    for (const session of chats) {
+        const current = usageByAgent.get(session.agentId) || 0;
+        const messageCount = Array.isArray(session.messages)
+            ? session.messages.filter(message => message.role === 'user').length
+            : 0;
+        usageByAgent.set(session.agentId, current + Math.max(1, messageCount));
+    }
+
+    const agents = getAgents();
+    const topAgents = Array.from(usageByAgent.entries())
+        .map(([agentId, queries]) => ({
+            agentName: agents.find(agent => agent.id === agentId)?.name || 'Assistente',
+            queries,
+        }))
+        .sort((a, b) => b.queries - a.queries)
+        .slice(0, 5);
+
+    return {
+        totalUsers,
+        activeUsers,
+        mrr: formatReais(currentRevenue),
+        churnRate: `${churn.toFixed(1)}%`,
+        totalQueries: currentQueries,
+        revenueChange,
+        queriesChange,
+        planDistribution,
+        topAgents,
     };
 };
 

@@ -822,9 +822,60 @@ export const ProfileView: React.FC<{ user: UserProfile }> = ({ user }) => {
 // --- ADMIN COMPONENTS ---
 
 export const AdminOverview: React.FC = () => {
-    const [metrics, setMetrics] = useState({ totalUsers: 0, activeUsers: 0, mrr: '0.00', churnRate: '0%' });
+    const [metrics, setMetrics] = useState({
+      totalUsers: 0,
+      activeUsers: 0,
+      mrr: '0,00',
+      churnRate: '0%',
+      totalQueries: 0,
+      revenueChange: 0,
+      queriesChange: 0,
+      planDistribution: [] as Array<{ plan: string; count: number; percent: number }>,
+      topAgents: [] as Array<{ agentName: string; queries: number }>,
+    });
     const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
     const [loading, setLoading] = useState(false);
+
+  const normalizeMetrics = (raw: any) => {
+    if (!raw || typeof raw !== 'object') {
+      return {
+        totalUsers: 0,
+        activeUsers: 0,
+        mrr: '0,00',
+        churnRate: '0%',
+        totalQueries: 0,
+        revenueChange: 0,
+        queriesChange: 0,
+        planDistribution: [],
+        topAgents: [],
+      };
+    }
+
+    const totalUsers = Number(raw.totalUsers ?? raw.users?.total ?? 0);
+    const activeUsers = Number(raw.activeUsers ?? raw.activeUsers?.current ?? 0);
+    const mrrValue = raw.mrr ?? raw.revenue?.current ?? 0;
+    const churnValue = raw.churnRate ?? raw.churnRate?.current ?? 0;
+
+    const normalizedMrr = typeof mrrValue === 'string'
+      ? mrrValue
+      : Number(mrrValue || 0).toFixed(2);
+
+    const normalizedChurn = typeof churnValue === 'string'
+      ? churnValue
+      : `${Number(churnValue || 0).toFixed(1)}%`;
+
+    return {
+      totalUsers: Number.isFinite(totalUsers) ? totalUsers : 0,
+      activeUsers: Number.isFinite(activeUsers) ? activeUsers : 0,
+      mrr: normalizedMrr,
+      churnRate: normalizedChurn,
+      totalQueries: Number(raw.totalQueries ?? 0),
+      revenueChange: Number(raw.revenueChange ?? 0),
+      queriesChange: Number(raw.queriesChange ?? 0),
+      planDistribution: Array.isArray(raw.planDistribution) ? raw.planDistribution : [],
+      topAgents: Array.isArray(raw.topAgents) ? raw.topAgents : [],
+    };
+  };
     
     useEffect(() => {
         loadMetrics();
@@ -833,9 +884,23 @@ export const AdminOverview: React.FC = () => {
     const loadMetrics = () => {
         setLoading(true);
         setTimeout(() => {
-            setMetrics(Storage.getFinancialMetrics());
+      setMetrics(normalizeMetrics(Storage.getFinancialMetrics(period)));
             setLoading(false);
         }, 300);
+    };
+
+    const engagement = metrics.totalUsers > 0
+      ? ((metrics.activeUsers / metrics.totalUsers) * 100).toFixed(0)
+      : '0';
+
+    const revenueChangeAbs = Math.abs(metrics.revenueChange).toFixed(1);
+    const queriesChangeAbs = Math.abs(metrics.queriesChange).toFixed(1);
+
+    const planDotColors: Record<string, string> = {
+      Empresa: 'bg-blue-600',
+      Profissional: 'bg-emerald-500',
+      Iniciante: 'bg-amber-500',
+      Free: 'bg-slate-400',
     };
 
     return (
@@ -884,8 +949,8 @@ export const AdminOverview: React.FC = () => {
                             <DollarSign className="text-green-500 bg-green-50 p-1 sm:p-1.5 rounded-lg w-6 h-6 sm:w-8 sm:h-8" />
                         </div>
                         <p className="text-xl sm:text-3xl font-bold text-slate-900">R$ {metrics.mrr}</p>
-                        <span className="text-[10px] sm:text-xs text-green-600 font-medium flex items-center mt-1 sm:mt-2">
-                             <TrendingUp size={12} className="mr-1" /> +12% vs período anterior
+                            <span className={`text-[10px] sm:text-xs font-medium flex items-center mt-1 sm:mt-2 ${metrics.revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              <TrendingUp size={12} className="mr-1" /> {metrics.revenueChange >= 0 ? '+' : '-'}{revenueChangeAbs}% vs período anterior
                         </span>
                     </div>
 
@@ -895,7 +960,7 @@ export const AdminOverview: React.FC = () => {
                             <Users className="text-blue-500 bg-blue-50 p-1 sm:p-1.5 rounded-lg w-6 h-6 sm:w-8 sm:h-8" />
                         </div>
                         <p className="text-xl sm:text-3xl font-bold text-slate-900">{metrics.activeUsers} <span className="text-slate-400 text-sm sm:text-lg font-normal">/ {metrics.totalUsers}</span></p>
-                        <span className="text-xs text-slate-500 mt-2 block">{((metrics.activeUsers / metrics.totalUsers) * 100).toFixed(0)}% de engajamento</span>
+                        <span className="text-xs text-slate-500 mt-2 block">{engagement}% de engajamento</span>
                     </div>
 
                     <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -912,9 +977,9 @@ export const AdminOverview: React.FC = () => {
                             <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Consultas IA</h3>
                             <Zap className="text-purple-500 bg-purple-50 p-1 sm:p-1.5 rounded-lg w-6 h-6 sm:w-8 sm:h-8" />
                         </div>
-                        <p className="text-xl sm:text-3xl font-bold text-slate-900">12.4k</p>
-                        <span className="text-[10px] sm:text-xs text-purple-600 font-medium flex items-center mt-1 sm:mt-2">
-                             <TrendingUp size={12} className="mr-1" /> +28% vs período anterior
+                        <p className="text-xl sm:text-3xl font-bold text-slate-900">{metrics.totalQueries.toLocaleString('pt-BR')}</p>
+                        <span className={`text-[10px] sm:text-xs font-medium flex items-center mt-1 sm:mt-2 ${metrics.queriesChange >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                           <TrendingUp size={12} className="mr-1" /> {metrics.queriesChange >= 0 ? '+' : '-'}{queriesChangeAbs}% vs período anterior
                         </span>
                     </div>
                 </div>
@@ -926,34 +991,17 @@ export const AdminOverview: React.FC = () => {
                             <PieChart size={18} className="text-blue-600" /> Distribuição por Plano
                         </h3>
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                                    <span className="text-sm font-medium text-slate-700">Empresa</span>
-                                </div>
-                                <span className="text-sm font-bold text-slate-900">45%</span>
+                          {metrics.planDistribution.length > 0 ? metrics.planDistribution.map((planItem) => (
+                          <div key={planItem.plan} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded ${planDotColors[planItem.plan] || 'bg-slate-400'}`}></div>
+                            <span className="text-sm font-medium text-slate-700">{planItem.plan}</span>
                             </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-emerald-500 rounded"></div>
-                                    <span className="text-sm font-medium text-slate-700">Profissional</span>
-                                </div>
-                                <span className="text-sm font-bold text-slate-900">30%</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-amber-500 rounded"></div>
-                                    <span className="text-sm font-medium text-slate-700">Iniciante</span>
-                                </div>
-                                <span className="text-sm font-bold text-slate-900">20%</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-slate-400 rounded"></div>
-                                    <span className="text-sm font-medium text-slate-700">Free</span>
-                                </div>
-                                <span className="text-sm font-bold text-slate-900">5%</span>
-                            </div>
+                            <span className="text-sm font-bold text-slate-900">{planItem.percent}% ({planItem.count})</span>
+                          </div>
+                          )) : (
+                          <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-500">Sem dados de plano no período.</div>
+                          )}
                         </div>
                     </div>
 
@@ -962,22 +1010,14 @@ export const AdminOverview: React.FC = () => {
                             <Activity size={18} className="text-blue-600" /> Top 5 Agentes Mais Usados
                         </h3>
                         <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                              <span className="text-sm font-medium text-slate-700">Eng. de Segurança</span>
-                                <span className="text-sm font-bold text-slate-900">8.2k consultas</span>
+                          {metrics.topAgents.length > 0 ? metrics.topAgents.map((agent) => (
+                            <div key={agent.agentName} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                              <span className="text-sm font-medium text-slate-700">{agent.agentName}</span>
+                              <span className="text-sm font-bold text-slate-900">{agent.queries.toLocaleString('pt-BR')} consultas</span>
                             </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                              <span className="text-sm font-medium text-slate-700">Mentor Técnico</span>
-                                <span className="text-sm font-bold text-slate-900">3.1k consultas</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                              <span className="text-sm font-medium text-slate-700">Especialista Schindler</span>
-                                <span className="text-sm font-bold text-slate-900">1.8k consultas</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                              <span className="text-sm font-medium text-slate-700">Especialista Otis</span>
-                                <span className="text-sm font-bold text-slate-900">950 consultas</span>
-                            </div>
+                          )) : (
+                            <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-500">Sem dados de uso de agentes ainda.</div>
+                          )}
                         </div>
                     </div>
                 </div>
@@ -985,7 +1025,7 @@ export const AdminOverview: React.FC = () => {
                 {/* Quick Actions */}
                 <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-6 rounded-xl text-white">
                     <h3 className="font-bold text-lg mb-2">Sistema em Crescimento 🚀</h3>
-                    <p className="text-blue-50 text-sm mb-4">O sistema está performando {period === '30d' ? '12%' : '18%'} acima da meta para o período selecionado.</p>
+                  <p className="text-blue-50 text-sm mb-4">No período selecionado: {metrics.totalUsers} usuários totais, {metrics.activeUsers} ativos e R$ {metrics.mrr} de MRR.</p>
                     <div className="flex gap-3">
                         <button className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-50 transition-colors">
                             Ver Relatório Completo
