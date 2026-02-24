@@ -7,7 +7,7 @@ import {
     Download, Zap, CheckCircle2, Edit2, Archive, MoreVertical, 
     X, Check, AlertCircle, Users, TrendingUp, DollarSign, Activity, Calendar,
   PieChart, BrainCircuit, Rocket, ChevronDown, ChevronRight, Upload, MapPin, Lock, User,
-  Settings2, Save, Wallet, LineChart
+  Settings2, Save, Wallet, LineChart, Plus
 } from 'lucide-react';
 import * as Storage from '../services/storage';
 
@@ -1121,6 +1121,8 @@ export const AdminOverview: React.FC = () => {
 export const AdminPlans: React.FC = () => {
   const [plans, setPlans] = useState(Storage.getPlanSettings());
 
+  const isBasePlan = (id: string) => ['free', 'iniciante', 'profissional', 'empresa'].includes(id);
+
   const handleField = (id: string, field: keyof Storage.PlanSetting, value: any) => {
     setPlans(prev => prev.map(plan => {
       if (plan.id !== id) return plan;
@@ -1134,9 +1136,32 @@ export const AdminPlans: React.FC = () => {
   };
 
   const handleSave = () => {
-    const saved = Storage.savePlanSettings(plans);
+    const normalized = plans.map(plan => ({ ...plan, period: 'mês' }));
+    const saved = Storage.savePlanSettings(normalized);
     setPlans(saved);
     alert('Planos atualizados com sucesso.');
+  };
+
+  const handleAddPlan = () => {
+    const customId = `plano_${Date.now()}`;
+    setPlans(prev => ([
+      ...prev,
+      {
+        id: customId,
+        name: `Novo Plano ${prev.length + 1}`,
+        price: 0,
+        period: 'mês',
+        queriesLimitPer24h: 1,
+        devicesLimit: 1,
+        features: ['Descreva os recursos aqui'],
+        popular: false,
+      },
+    ]));
+  };
+
+  const handleRemovePlan = (id: string) => {
+    if (isBasePlan(id)) return;
+    setPlans(prev => prev.filter(plan => plan.id !== id));
   };
 
   return (
@@ -1147,17 +1172,33 @@ export const AdminPlans: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Configuração de Planos</h1>
             <p className="text-slate-500 mt-1 text-sm sm:text-base">Ajuste preço, limites e recursos dos planos e aplique no sistema.</p>
           </div>
-          <button onClick={handleSave} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
-            <Save size={16} /> Salvar Configurações
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleAddPlan} className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-semibold hover:bg-slate-50 transition-colors flex items-center gap-2">
+              <Plus size={16} /> Novo Card
+            </button>
+            <button onClick={handleSave} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+              <Save size={16} /> Salvar Configurações
+            </button>
+          </div>
         </div>
 
         <div className="space-y-5">
           {plans.map(plan => (
             <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
                 <Settings2 size={16} className="text-blue-600" />
-                <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+                  <input
+                    value={plan.name}
+                    onChange={e => handleField(plan.id, 'name', e.target.value)}
+                    className="text-lg font-bold text-slate-900 border border-transparent focus:border-slate-300 rounded px-2 py-1 focus:outline-none"
+                  />
+                </div>
+                {!isBasePlan(plan.id) && (
+                  <button onClick={() => handleRemovePlan(plan.id)} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-1.5 rounded-md hover:bg-red-100 transition-colors">
+                    Remover Card
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1175,7 +1216,7 @@ export const AdminPlans: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Período</label>
-                  <input type="text" value={plan.period} onChange={e => handleField(plan.id, 'period', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-600">mês</div>
                 </div>
               </div>
 
@@ -1197,6 +1238,7 @@ export const AdminUsers: React.FC = () => {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [detailsUser, setDetailsUser] = useState<UserProfile | null>(null);
   const [editData, setEditData] = useState<Partial<UserProfile>>({});
+  const planOptions = Storage.getPlanSettings().map(plan => plan.name);
 
   useEffect(() => {
     setUsers(Storage.getAdminUsers());
@@ -1362,11 +1404,10 @@ export const AdminUsers: React.FC = () => {
                 <input value={String(editData.name || '')} onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Nome" />
                 <input value={String(editData.email || '')} onChange={e => setEditData(prev => ({ ...prev, email: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Email" />
                 <input value={String(editData.company || '')} onChange={e => setEditData(prev => ({ ...prev, company: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" placeholder="Empresa" />
-                <select value={String(editData.plan || detailsUser.plan)} onChange={e => setEditData(prev => ({ ...prev, plan: e.target.value as UserProfile['plan'] }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg">
-                  <option value="Free">Free</option>
-                  <option value="Iniciante">Iniciante</option>
-                  <option value="Profissional">Profissional</option>
-                  <option value="Empresa">Empresa</option>
+                <select value={String(editData.plan || detailsUser.plan)} onChange={e => setEditData(prev => ({ ...prev, plan: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg">
+                  {planOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
                 <input type="date" value={String(editData.nextBillingDate || detailsUser.nextBillingDate)} onChange={e => setEditData(prev => ({ ...prev, nextBillingDate: e.target.value }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg" />
                 <select value={String(editData.paymentMethod || detailsUser.paymentMethod || 'Não informado')} onChange={e => setEditData(prev => ({ ...prev, paymentMethod: e.target.value as UserProfile['paymentMethod'] }))} className="px-3 py-2 text-sm border border-slate-200 rounded-lg">

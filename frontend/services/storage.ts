@@ -36,8 +36,8 @@ type PlanQuotaPolicy = {
 };
 
 export type PlanSetting = {
-    id: 'free' | 'iniciante' | 'profissional' | 'empresa';
-    name: UserProfile['plan'];
+    id: string;
+    name: string;
     price: number;
     period: string;
     queriesLimitPer24h: number | 'Infinity';
@@ -46,14 +46,14 @@ export type PlanSetting = {
     popular?: boolean;
 };
 
-const PLAN_QUOTA_POLICIES: Record<UserProfile['plan'], PlanQuotaPolicy> = {
+const PLAN_QUOTA_POLICIES: Record<string, PlanQuotaPolicy> = {
     Free: { limitPer24h: 1, devices: 1 },
     Iniciante: { limitPer24h: 5, devices: 1 },
     Profissional: { limitPer24h: 'Infinity', devices: 1 },
     Empresa: { limitPer24h: 'Infinity', devices: 5 },
 };
 
-const PLAN_MONTHLY_PRICE: Record<UserProfile['plan'], number> = {
+const PLAN_MONTHLY_PRICE: Record<string, number> = {
     Free: 0,
     Iniciante: 9.99,
     Profissional: 19.99,
@@ -214,7 +214,12 @@ const ensurePlanSettings = (): PlanSetting[] => {
             }
         }
 
-        const merged = DEFAULT_PLAN_SETTINGS.map(plan => byId.get(plan.id) || plan);
+        const merged = [...DEFAULT_PLAN_SETTINGS];
+        for (const [id, customPlan] of byId.entries()) {
+            if (!DEFAULT_PLAN_SETTINGS.some(base => base.id === id)) {
+                merged.push(customPlan);
+            }
+        }
         localStorage.setItem(PLAN_CONFIG_KEY, JSON.stringify(merged));
         return merged;
     } catch {
@@ -226,8 +231,7 @@ const ensurePlanSettings = (): PlanSetting[] => {
 export const getPlanSettings = (): PlanSetting[] => ensurePlanSettings();
 
 export const savePlanSettings = (settings: PlanSetting[]): PlanSetting[] => {
-    const current = ensurePlanSettings();
-    const byId = new Map(current.map(plan => [plan.id, plan]));
+    const byId = new Map<string, PlanSetting>();
 
     for (const incoming of settings) {
         if (!incoming?.id || !incoming?.name) continue;
@@ -241,12 +245,27 @@ export const savePlanSettings = (settings: PlanSetting[]): PlanSetting[] => {
         });
     }
 
-    const ordered = DEFAULT_PLAN_SETTINGS.map(plan => byId.get(plan.id) || plan);
+    for (const fallback of DEFAULT_PLAN_SETTINGS) {
+        if (!byId.has(fallback.id)) {
+            byId.set(fallback.id, fallback);
+        }
+    }
+
+    const ordered: PlanSetting[] = [];
+    for (const base of DEFAULT_PLAN_SETTINGS) {
+        const existing = byId.get(base.id);
+        if (existing) ordered.push(existing);
+        byId.delete(base.id);
+    }
+    for (const custom of byId.values()) {
+        ordered.push(custom);
+    }
+
     localStorage.setItem(PLAN_CONFIG_KEY, JSON.stringify(ordered));
     return ordered;
 };
 
-export const getPlanByName = (planName: UserProfile['plan']): PlanSetting | undefined => {
+export const getPlanByName = (planName: string): PlanSetting | undefined => {
     return ensurePlanSettings().find(plan => plan.name === planName);
 };
 
@@ -263,7 +282,7 @@ export const getPublicPlans = () => {
     }));
 };
 
-export const getPlanPrice = (planName: UserProfile['plan']): number => {
+export const getPlanPrice = (planName: string): number => {
     const fromSettings = getPlanByName(planName);
     if (fromSettings) return Number(fromSettings.price || 0);
     return PLAN_MONTHLY_PRICE[planName] || 0;
@@ -638,10 +657,8 @@ export const login = (type: 'admin' | 'user'): UserProfile => {
 };
 
 export const signup = (data: Partial<UserProfile>): UserProfile => {
-    const requestedPlan = (['Free', 'Iniciante', 'Profissional', 'Empresa'] as const).includes(data.plan as UserProfile['plan'])
-        ? (data.plan as UserProfile['plan'])
-        : 'Free';
-    const requestedStatus = data.status || (requestedPlan === 'Free' ? 'active' : 'pending_payment');
+    const requestedPlan = String(data.plan || '').trim() || 'Free';
+    const requestedStatus = data.status || (getPlanPrice(requestedPlan) === 0 ? 'active' : 'pending_payment');
 
     const today = new Date();
     const billingDate = new Date(today);

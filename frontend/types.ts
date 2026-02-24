@@ -78,7 +78,7 @@ export interface UserProfile {
     state?: string;
     zipCode?: string;
   };
-  plan: 'Free' | 'Iniciante' | 'Profissional' | 'Empresa';
+  plan: string;
   creditsUsed: number;
   creditsLimit: number | 'Infinity';
   isAdmin?: boolean; 

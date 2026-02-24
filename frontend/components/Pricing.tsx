@@ -119,7 +119,9 @@ const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
                     ? 'Assinar Iniciante'
                     : plan.id === 'profissional'
                       ? 'Assinar Profissional'
-                      : 'Assinar Empresa'}
+                      : plan.id === 'empresa'
+                        ? 'Assinar Empresa'
+                        : `Assinar ${plan.name}`}
               </button>
             </div>
           ))}
