@@ -383,6 +383,7 @@ async def compat_upload_brand_document(
         brand_id=brand.id,
         filename=str(Path(brand.slug) / safe_filename),
         original_filename=pdf.filename,
+        file_size=len(content),
         status="pending",
     )
     db.add(document)
