@@ -22,6 +22,25 @@ from agent.clarifier import (
 logger = logging.getLogger(__name__)
 
 
+def _is_greeting_only(query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+    compact = re.sub(r"[!?.\s]+", " ", q).strip()
+    greetings = {
+        "oi", "ola", "olá", "bom dia", "boa tarde", "boa noite", "e ai", "e aí", "opa"
+    }
+    return compact in greetings
+
+
+def _is_door_cycle_no_start_symptom(query: str) -> bool:
+    q = (query or "").lower()
+    has_door = bool(re.search(r"\b(porta|dw|dfc)\b", q, re.IGNORECASE))
+    has_cycle = bool(re.search(r"abr(e|indo).*(fech|fecha)|fech(a|ando).*(abr|abre)", q, re.IGNORECASE))
+    has_no_start = bool(re.search(r"n[aã]o\s+parte|n[aã]o\s+sobe|n[aã]o\s+arranca|n[aã]o\s+anda", q, re.IGNORECASE))
+    return has_door and (has_cycle or has_no_start)
+
+
 def _expand_brand_query_terms(query: str, brand_name: str) -> str:
     """Add high-value brand-specific aliases to improve retrieval precision."""
     base_query = (query or "").strip()
@@ -35,11 +54,20 @@ def _expand_brand_query_terms(query: str, brand_name: str) -> str:
     if "otis" in brand:
         has_porta_theme = bool(re.search(r"\b(porta|dw|dfc|door)\b", q_low, re.IGNORECASE))
         has_safety_theme = bool(re.search(r"\b(seguran[cç]a|es|safety)\b", q_low, re.IGNORECASE))
+        has_door_cycle_no_start = _is_door_cycle_no_start_symptom(base_query)
 
         if has_porta_theme:
             additions.extend(["DW", "DFC", "porta cabine", "porta pavimento"])
         if has_safety_theme:
             additions.extend(["ES", "segurança"])
+        if has_door_cycle_no_start:
+            additions.extend([
+                "contato de porta",
+                "intertravamento",
+                "trinco de porta",
+                "cadeia de segurança",
+                "não parte após fechamento da porta",
+            ])
 
     if not additions:
         return base_query
@@ -55,6 +83,36 @@ def _expand_brand_query_terms(query: str, brand_name: str) -> str:
         return base_query
 
     return f"{base_query} {' '.join(filtered_additions)}"
+
+
+def _prioritize_symptom_chunks(chunks: list[dict], query: str, brand_name: str) -> list[dict]:
+    if not chunks:
+        return chunks
+
+    brand = (brand_name or "").lower()
+    if "otis" not in brand or not _is_door_cycle_no_start_symptom(query):
+        return chunks
+
+    door_patterns = [
+        r"\bporta\b", r"\bdw\b", r"\bdfc\b", r"intertrav", r"trinco", r"contato\s+de\s+porta", r"cadeia\s+de\s+seguran"
+    ]
+    avoid_patterns = [
+        r"cabo\s+de\s+tra[cç][aã]o", r"contrapeso", r"polia", r"tens[aã]o\s+do\s+cabo"
+    ]
+
+    rescored: list[tuple[float, dict]] = []
+    for chunk in chunks:
+        text = f"{chunk.get('text', '')} {chunk.get('source', '')}".lower()
+        base_score = float(chunk.get("score", 0.0))
+        bonus = 0.0
+        if any(re.search(p, text, re.IGNORECASE) for p in door_patterns):
+            bonus += 0.12
+        if any(re.search(p, text, re.IGNORECASE) for p in avoid_patterns):
+            bonus -= 0.08
+        rescored.append((base_score + bonus, chunk))
+
+    rescored.sort(key=lambda item: item[0], reverse=True)
+    return [chunk for _, chunk in rescored]
 
 
 async def get_or_create_session(
@@ -137,6 +195,26 @@ async def chat(
     db.add(user_msg)
     await db.commit()
 
+    if _is_greeting_only(query):
+        greeting_answer = (
+            f"Olá! 👋 Bom te ver por aqui. Sou seu assistente técnico da **{brand_name}**.\n\n"
+            "Pode me descrever a falha com **modelo/geração**, **placa/controlador** e **código de erro** (se houver) que eu te respondo direto e objetivo."
+        )
+        asst_msg = ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=greeting_answer,
+            sources=json.dumps([]),
+        )
+        db.add(asst_msg)
+        await db.commit()
+        return {
+            "session_id": session.session_id,
+            "answer": greeting_answer,
+            "sources": [],
+            "needs_clarification": False,
+        }
+
     # --- Step 0: Mandatory model/board/code clarification gate ---
     # If technical question lacks identifying info, always ask first.
     if should_require_model_clarification(query, history):
@@ -206,6 +284,7 @@ async def chat(
 
     # --- Step 3: Search Qdrant (multi-strategy) ---
     chunks = search_brand(brand_slug, enriched_query, top_k=20)
+    chunks = _prioritize_symptom_chunks(chunks, enriched_query, brand_name)
 
     # --- Step 3.5: Fallback search strategies ---
     # If the main search didn't find confident results and the query has
@@ -228,6 +307,7 @@ async def chat(
 
             # Re-sort all chunks by score
             chunks.sort(key=lambda x: x["score"], reverse=True)
+            chunks = _prioritize_symptom_chunks(chunks, enriched_query, brand_name)
             # Keep top results
             chunks = chunks[:25]
             # Re-analyze confidence with expanded results
@@ -247,6 +327,7 @@ async def chat(
                 chunks.append(oc)
                 existing_keys.add(key)
         chunks.sort(key=lambda x: x["score"], reverse=True)
+        chunks = _prioritize_symptom_chunks(chunks, enriched_query, brand_name)
         chunks = chunks[:25]
         confidence = analyze_search_confidence(chunks, enriched_query)
 
