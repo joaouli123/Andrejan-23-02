@@ -1,6 +1,7 @@
 import uuid
 import json
 import logging
+import re
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -19,6 +20,41 @@ from agent.clarifier import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _expand_brand_query_terms(query: str, brand_name: str) -> str:
+    """Add high-value brand-specific aliases to improve retrieval precision."""
+    base_query = (query or "").strip()
+    if not base_query:
+        return base_query
+
+    brand = (brand_name or "").strip().lower()
+    additions: list[str] = []
+    q_low = base_query.lower()
+
+    if "otis" in brand:
+        has_porta_theme = bool(re.search(r"\b(porta|dw|dfc|door)\b", q_low, re.IGNORECASE))
+        has_safety_theme = bool(re.search(r"\b(seguran[cç]a|es|safety)\b", q_low, re.IGNORECASE))
+
+        if has_porta_theme:
+            additions.extend(["DW", "DFC", "porta cabine", "porta pavimento"])
+        if has_safety_theme:
+            additions.extend(["ES", "segurança"])
+
+    if not additions:
+        return base_query
+
+    existing_compact = re.sub(r"[^a-z0-9]", "", q_low)
+    filtered_additions: list[str] = []
+    for item in additions:
+        compact = re.sub(r"[^a-z0-9]", "", item.lower())
+        if compact and compact not in existing_compact:
+            filtered_additions.append(item)
+
+    if not filtered_additions:
+        return base_query
+
+    return f"{base_query} {' '.join(filtered_additions)}"
 
 
 async def get_or_create_session(
@@ -164,6 +200,8 @@ async def chat(
     else:
         enriched_query = query
 
+    enriched_query = _expand_brand_query_terms(enriched_query, brand_name)
+
     logger.info(f"Query: '{query}' | Enriched: '{enriched_query}'")
 
     # --- Step 3: Search Qdrant (multi-strategy) ---
@@ -199,8 +237,9 @@ async def chat(
     # Also try the original query separately if enriched query is very different
     if (enriched_query != query and len(enriched_query) > len(query) * 1.5
             and (not confidence["confident"] or confidence["top_score"] < 0.70)):
-        logger.info(f"Trying original query as fallback: '{query}'")
-        original_chunks = search_brand(brand_slug, query, top_k=10)
+        fallback_query = _expand_brand_query_terms(query, brand_name)
+        logger.info(f"Trying original query as fallback: '{fallback_query}'")
+        original_chunks = search_brand(brand_slug, fallback_query, top_k=10)
         existing_keys = {(c["doc_id"], c["page"]) for c in chunks}
         for oc in original_chunks:
             key = (oc["doc_id"], oc["page"])

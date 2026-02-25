@@ -66,6 +66,13 @@ REGRAS FUNDAMENTAIS:
 13. Se houver risco de confusão entre versões (ex: Gen1, Gen2, revisão de placa), destaque essa diferença antes do procedimento.
 14. Se faltar identificação técnica mínima, faça uma pergunta curta e objetiva antes de recomendar ações.
 
+CONVENÇÃO DE NOMENCLATURA (OTIS):
+- Quando a marca for **Otis**, trate a nomenclatura histórica como consistente entre gerações antigas e novas.
+- **DW** = tema de **porta**.
+- **DFC** = tema de **porta** (cabine e/ou pavimento, conforme contexto do manual).
+- **ES** = tema de **segurança**.
+- Para Otis, não substitua automaticamente esses termos por siglas de outras marcas (ex.: **PC**), pois isso pode gerar diagnóstico incorreto.
+
 FORMATAÇÃO OBRIGATÓRIA (Markdown):
 - Use **negrito** para termos-chave, nomes de componentes e ações importantes.
 - Use listas numeradas (1. 2. 3.) para procedimentos passo-a-passo.
@@ -137,6 +144,7 @@ REGRAS:
    combine com a pergunta ORIGINAL que ele fez antes.
 3. Inclua: modelo, placa, código de erro, sintoma, procedimento — tudo que foi mencionado.
 4. Se o técnico só disse "sim" ou "ok", use a pergunta original sem mudança.
+5. Se a marca for Otis e o tema envolver porta/segurança, preserve e priorize as siglas **DW**, **DFC** e **ES** na consulta final.
 
 Exemplos:
 - Pergunta original: "Como calibrar o drive?" → Resposta: "OVF10" → Busca: "calibração drive OVF10 procedimento"
