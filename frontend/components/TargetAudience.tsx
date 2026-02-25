@@ -60,17 +60,17 @@ const TargetAudience: React.FC = () => {
 
           {/* Experienced Techs */}
           <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 p-8 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 group relative">
-             <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-md">
+             <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-blue-400 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-md">
                Mais Usado
              </div>
-             <div className="flex items-center justify-center w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl mb-8 group-hover:scale-110 transition-transform duration-300 mt-2">
+             <div className="flex items-center justify-center w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl mb-8 group-hover:scale-110 transition-transform duration-300 mt-2">
               <Award className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold text-slate-900 mb-6">Técnicos Experientes</h3>
              <ul className="space-y-5">
               <li className="flex items-start">
-                <div className="bg-amber-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <TrendingUp className="w-4 h-4 text-amber-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Atualização</span>
@@ -78,8 +78,8 @@ const TargetAudience: React.FC = () => {
                 </div>
               </li>
               <li className="flex items-start">
-                <div className="bg-amber-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <Clock className="w-4 h-4 text-amber-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <Clock className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Agilidade</span>
@@ -87,8 +87,8 @@ const TargetAudience: React.FC = () => {
                 </div>
               </li>
                <li className="flex items-start">
-                <div className="bg-amber-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <Award className="w-4 h-4 text-amber-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <Award className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Especialize-se</span>
@@ -100,14 +100,14 @@ const TargetAudience: React.FC = () => {
 
           {/* Beginners */}
           <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 p-8 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 group">
-             <div className="flex items-center justify-center w-16 h-16 bg-green-50 text-green-600 rounded-2xl mb-8 group-hover:scale-110 transition-transform duration-300">
+             <div className="flex items-center justify-center w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl mb-8 group-hover:scale-110 transition-transform duration-300">
               <TrendingUp className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-bold text-slate-900 mb-6">Técnicos Iniciantes</h3>
              <ul className="space-y-5">
               <li className="flex items-start">
-                <div className="bg-green-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Acelerador</span>
@@ -115,8 +115,8 @@ const TargetAudience: React.FC = () => {
                 </div>
               </li>
                <li className="flex items-start">
-                <div className="bg-green-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <ShieldCheck className="w-4 h-4 text-green-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Segurança</span>
@@ -124,8 +124,8 @@ const TargetAudience: React.FC = () => {
                 </div>
               </li>
                <li className="flex items-start">
-                <div className="bg-green-50 p-1.5 rounded-lg mr-3 mt-0.5">
-                  <DollarSign className="w-4 h-4 text-green-600" />
+                <div className="bg-blue-50 p-1.5 rounded-lg mr-3 mt-0.5">
+                  <DollarSign className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 block mb-1">Reconhecimento</span>

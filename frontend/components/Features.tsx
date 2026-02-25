@@ -7,7 +7,7 @@ const Features: React.FC = () => {
       {/* Background Elements */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-blue-50 rounded-full blur-3xl opacity-50"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-50 rounded-full blur-3xl opacity-50"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-100 rounded-full blur-3xl opacity-50"></div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -20,7 +20,7 @@ const Features: React.FC = () => {
           </div>
           <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl lg:text-5xl tracking-tight mb-6">
             Transforme Defeitos Complexos em{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-400">
               Soluções Simples
             </span>
           </h2>
@@ -42,8 +42,8 @@ const Features: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-lg shadow-slate-200/40 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-             <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-              <Search className="w-7 h-7 text-amber-600" />
+             <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+              <Search className="w-7 h-7 text-blue-600" />
             </div>
             <h3 className="text-xl font-bold text-slate-900 mb-3">Diagnóstico Preciso</h3>
             <p className="text-slate-600 leading-relaxed">
@@ -52,8 +52,8 @@ const Features: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-lg shadow-slate-200/40 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-             <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-              <Wrench className="w-7 h-7 text-green-600" />
+             <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+              <Wrench className="w-7 h-7 text-blue-600" />
             </div>
             <h3 className="text-xl font-bold text-slate-900 mb-3">Guia de Reparo</h3>
             <p className="text-slate-600 leading-relaxed">
@@ -89,8 +89,8 @@ const Features: React.FC = () => {
 
               <div className="flex gap-5">
                 <div className="flex-shrink-0 mt-1">
-                  <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center border border-green-500/20">
-                    <ShieldCheck className="w-6 h-6 text-green-400" />
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-blue-500/20">
+                    <ShieldCheck className="w-6 h-6 text-blue-400" />
                   </div>
                 </div>
                 <div>

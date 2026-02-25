@@ -27,7 +27,7 @@ const Hero: React.FC<HeroProps> = ({ onCtaClick, onViewPlans }) => {
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.15] mb-6 animate-slide-up">
               A Inteligência que Faltava na{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-400">
                 Casa de Máquinas
               </span>
             </h1>
@@ -63,14 +63,14 @@ const Hero: React.FC<HeroProps> = ({ onCtaClick, onViewPlans }) => {
               </div>
               <div className="flex flex-col items-center lg:items-start">
                 <div className="flex items-center text-slate-700 font-semibold mb-1">
-                  <ShieldCheck className="w-5 h-5 text-green-500 mr-2" />
+                  <ShieldCheck className="w-5 h-5 text-blue-500 mr-2" />
                   <span>Preciso</span>
                 </div>
                 <span className="text-sm text-slate-500 text-center lg:text-left">Baseado em manuais reais</span>
               </div>
               <div className="flex flex-col items-center lg:items-start">
                 <div className="flex items-center text-slate-700 font-semibold mb-1">
-                  <Smartphone className="w-5 h-5 text-purple-500 mr-2" />
+                  <Smartphone className="w-5 h-5 text-blue-400 mr-2" />
                   <span>Prático</span>
                 </div>
                 <span className="text-sm text-slate-500 text-center lg:text-left">Na palma da sua mão</span>
@@ -119,7 +119,7 @@ const Hero: React.FC<HeroProps> = ({ onCtaClick, onViewPlans }) => {
                     
                     <div className="mt-4 p-3 bg-slate-800 rounded-xl border border-slate-600">
                       <div className="flex items-center gap-2 mb-2">
-                        <ShieldCheck className="w-4 h-4 text-green-400" />
+                        <ShieldCheck className="w-4 h-4 text-blue-400" />
                         <div className="h-3 w-24 bg-slate-500 rounded-md"></div>
                       </div>
                       <div className="h-3 w-full bg-slate-600/50 rounded-md mb-1.5"></div>
@@ -140,8 +140,8 @@ const Hero: React.FC<HeroProps> = ({ onCtaClick, onViewPlans }) => {
             
             {/* Floating Badge */}
             <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-2xl shadow-xl border border-slate-100 flex items-center gap-4 animate-slide-up" style={{ animationDelay: '0.5s' }}>
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <ShieldCheck className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6 text-blue-600" />
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-900">99.9% de Precisão</p>

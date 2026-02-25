@@ -95,7 +95,7 @@ const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
               className={`relative flex flex-col p-8 rounded-3xl transition-all duration-300 ${plan.popular ? 'border-2 border-blue-600 shadow-2xl shadow-blue-500/20 bg-white md:-translate-y-4 z-10' : 'border border-slate-200 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:-translate-y-1'}`}
             >
               {plan.popular && (
-                <div className='absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-md'>
+                <div className='absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-600 to-blue-400 text-white px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-md'>
                   Mais Popular
                 </div>
               )}
@@ -113,7 +113,7 @@ const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
               <ul className='flex-1 space-y-4 mb-8'>
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className='flex items-start'>
-                    <div className={`flex-shrink-0 mt-0.5 p-1 rounded-full ${plan.popular ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                    <div className={`flex-shrink-0 mt-0.5 p-1 rounded-full ${plan.popular ? 'bg-blue-100 text-blue-600' : 'bg-blue-50 text-blue-600'}`}>
                       <Check className='h-3 w-3' />
                     </div>
                     <span className='ml-3 text-slate-600 text-sm leading-relaxed'>{feature}</span>
