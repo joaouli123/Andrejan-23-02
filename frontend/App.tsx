@@ -106,6 +106,7 @@ const App: React.FC = () => {
     /* 3) logged-in user */
     const user = Storage.getUserProfile();
     if (user) {
+      const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
       if (user.status === 'pending_payment') {
         const plan = getAvailablePlans().find(p => p.name === user.plan);
         if (plan) {
@@ -115,6 +116,8 @@ const App: React.FC = () => {
         } else {
           navigateTo('landing', true);
         }
+      } else if (currentPath.startsWith('/dashboard')) {
+        setViewRaw('app');
       } else if (urlView && urlView !== 'landing' && urlView !== 'login' && urlView !== 'register' && urlView !== 'confirmation') {
         navigateTo(urlView, true);
       } else {

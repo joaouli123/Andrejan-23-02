@@ -16,26 +16,27 @@ const WaveChart = ({ data, color, height = 120, formatValue }: { data: { label: 
   
   const max = Math.max(...data.map(d => d.value)) || 1;
   const min = 0;
+  const range = Math.max(1, max - min);
   
-  const pathData = `M 0,100 L 0,${100 - ((data[0].value - min) / (max - min)) * 100} ` + 
+  const pathData = `M 0,100 L 0,${100 - ((data[0].value - min) / range) * 100} ` + 
     data.map((d, i) => {
       if (i === 0) return '';
       const prevX = ((i - 1) / (data.length - 1 || 1)) * 100;
-      const prevY = 100 - ((data[i - 1].value - min) / (max - min)) * 100;
+      const prevY = 100 - ((data[i - 1].value - min) / range) * 100;
       const currX = (i / (data.length - 1 || 1)) * 100;
-      const currY = 100 - ((d.value - min) / (max - min)) * 100;
+      const currY = 100 - ((d.value - min) / range) * 100;
       const cp1X = prevX + (currX - prevX) / 2;
       const cp2X = prevX + (currX - prevX) / 2;
       return `C ${cp1X},${prevY} ${cp2X},${currY} ${currX},${currY}`;
     }).join(' ') + ` L 100,100 Z`;
 
-  const linePath = `M 0,${100 - ((data[0].value - min) / (max - min)) * 100} ` + 
+  const linePath = `M 0,${100 - ((data[0].value - min) / range) * 100} ` + 
     data.map((d, i) => {
       if (i === 0) return '';
       const prevX = ((i - 1) / (data.length - 1 || 1)) * 100;
-      const prevY = 100 - ((data[i - 1].value - min) / (max - min)) * 100;
+      const prevY = 100 - ((data[i - 1].value - min) / range) * 100;
       const currX = (i / (data.length - 1 || 1)) * 100;
-      const currY = 100 - ((d.value - min) / (max - min)) * 100;
+      const currY = 100 - ((d.value - min) / range) * 100;
       const cp1X = prevX + (currX - prevX) / 2;
       const cp2X = prevX + (currX - prevX) / 2;
       return `C ${cp1X},${prevY} ${cp2X},${currY} ${currX},${currY}`;
@@ -55,7 +56,7 @@ const WaveChart = ({ data, color, height = 120, formatValue }: { data: { label: 
           <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {data.map((d, i) => {
             const x = (i / (data.length - 1 || 1)) * 100;
-            const y = 100 - ((d.value - min) / (max - min)) * 100;
+            const y = 100 - ((d.value - min) / range) * 100;
             return (
               <circle key={i} cx={x} cy={y} r="2" fill="white" stroke={color} strokeWidth="1" className="transition-all hover:r-3 cursor-pointer" />
             );
@@ -1414,12 +1415,15 @@ export const AdminUsers: React.FC = () => {
                     <MoreVertical size={16} />
                   </button>
                   {activeMenuId === u.id && (
-                    <div className="absolute right-6 top-12 w-44 bg-white border border-slate-200 shadow-xl rounded-lg z-20 py-1">
-                      <button onClick={() => handleToggleStatus(u)} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+                    <>
+                    <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)}></div>
+                    <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 shadow-xl rounded-lg z-20 py-1 overflow-hidden">
+                      <button onClick={() => { handleToggleStatus(u); setActiveMenuId(null); }} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
                         {u.status === 'active' ? 'Desativar usuário' : 'Ativar usuário'}
                       </button>
-                      <button onClick={() => openDetails(u)} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Ver detalhes</button>
+                      <button onClick={() => { openDetails(u); setActiveMenuId(null); }} className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">Ver detalhes</button>
                     </div>
+                    </>
                   )}
                 </td>
                 </tr>
