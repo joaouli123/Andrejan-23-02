@@ -1,0 +1,8 @@
+﻿INFO:     172.18.0.1:41838 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     172.18.0.1:45898 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     172.18.0.4:33736 - "GET /api/brands/1/documents HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51432 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51432 - "GET /admin/brands HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51432 - "GET /admin/brands/1/documents HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51432 - "DELETE /admin/documents/1 HTTP/1.1" 200 OK
+INFO:     172.18.0.1:51432 - "GET /admin/brands/2/documents HTTP/1.1" 200 OK

@@ -530,6 +530,23 @@ async def rag_query(request: QueryRequest, db: AsyncSession = Depends(get_db)):
     if not brand:
         raise HTTPException(status_code=404, detail="Nenhuma marca ativa encontrada")
 
+    # Convert frontend conversationHistory to backend format
+    ext_history: list[dict] = []
+    if request.conversationHistory:
+        for entry in request.conversationHistory:
+            role_raw = ""
+            text_raw = ""
+            if isinstance(entry, dict):
+                role_raw = entry.get("role", "")
+                parts = entry.get("parts", [])
+                if isinstance(parts, list) and parts:
+                    text_raw = parts[0].get("text", "") if isinstance(parts[0], dict) else str(parts[0])
+                elif "content" in entry:
+                    text_raw = entry.get("content", "")
+            role_mapped = "user" if role_raw == "user" else "assistant"
+            if text_raw:
+                ext_history.append({"role": role_mapped, "content": text_raw})
+
     response = await chat(
         db=db,
         user_id=admin_user.id,
@@ -538,6 +555,7 @@ async def rag_query(request: QueryRequest, db: AsyncSession = Depends(get_db)):
         brand_name=brand.name,
         query=question,
         session_id=None,
+        external_history=ext_history or None,
     )
 
     answer = response.get("answer", "")

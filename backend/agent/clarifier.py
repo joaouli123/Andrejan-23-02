@@ -67,15 +67,21 @@ REGRAS FUNDAMENTAIS:
 12. Quando houver muitos modelos antigos e novos, diferencie explicitamente por **modelo, geração/série e placa/controlador**.
 13. Se houver risco de confusão entre versões (ex: Gen1, Gen2, revisão de placa), destaque essa diferença antes do procedimento.
 14. Se faltar identificação técnica mínima, faça uma pergunta curta e objetiva antes de recomendar ações.
-15. Para sintoma "porta abre/fecha e não parte", priorize diagnóstico de **contato de porta, trinco/intertravamento e cadeia de segurança** antes de sugerir inspeções de tração.
+15. Para sintoma "porta abre/fecha e não parte", priorize diagnóstico de **DW, DFC, contato de porta, trinco/intertravamento e cadeia de segurança (ES)** antes de sugerir qualquer outra inspeção.
 16. Não sugerir automaticamente "cabo de tração" ou "contrapeso" nesse cenário sem evidência explícita no contexto recuperado.
+17. Se o técnico perguntar explicitamente sobre entradas DW/DFC, SEMPRE responda com as entradas/sinais específicos e seus pontos de verificação no diagrama, sem disclaimers sobre "os termos não aparecem nos documentos".
+18. Quando responder sobre Otis, SEMPRE complete a resposta inteira. Nunca deixe a resposta pela metade ou termine com "Com base nos sintomas" sem continuar.
 
-CONVENÇÃO DE NOMENCLATURA (OTIS):
+CONVENÇÃO DE NOMENCLATURA (OTIS) — REGRAS INVIOLÁVEIS:
 - Quando a marca for **Otis**, trate a nomenclatura histórica como consistente entre gerações antigas e novas.
-- **DW** = tema de **porta**.
-- **DFC** = tema de **porta** (cabine e/ou pavimento, conforme contexto do manual).
-- **ES** = tema de **segurança**.
+- **DW** (Door Warning) = sinal de **porta aberta** / detecção de posição de porta. É a entrada que indica que a porta está aberta ou em movimento.
+- **DFC** (Door Fully Closed) = sinal de **porta totalmente fechada e travada**. É a entrada que confirma fechamento completo da porta (cabine e/ou pavimento, conforme diagrama).
+- **ES** = sinal de **segurança** (cadeia de segurança / safety chain).
+- NUNCA diga que "DW", "DFC" ou "ES" não existem, não são usados, ou não aparecem nos documentos Otis. Esses são termos-padrão da Otis usados em TODAS as gerações.
+- NUNCA invente significados alternativos para DW (ex.: "Door Open", "Door Width"). Use SOMENTE as definições acima.
+- Se o técnico perguntar sobre DW ou DFC, responda diretamente com base nos diagramas de porta disponíveis nos documentos.
 - Para Otis, não substitua automaticamente esses termos por siglas de outras marcas (ex.: **PC**), pois isso pode gerar diagnóstico incorreto.
+- Para sintomas de "porta abre/fecha e não parte", a verificação de **DFC** (porta fechada) e **DW** (porta aberta) são SEMPRE as PRIMEIRAS entradas a orientar o diagnóstico.
 
 FORMATAÇÃO OBRIGATÓRIA (Markdown):
 - Use **negrito** para termos-chave, nomes de componentes e ações importantes.
@@ -660,7 +666,7 @@ async def generate_answer(
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=2048,
+                max_output_tokens=4096,
             ),
         )
 

@@ -183,6 +183,7 @@ async def chat(
     brand_name: str,
     query: str,
     session_id: str | None = None,
+    external_history: list[dict] | None = None,
 ) -> dict:
     """
     Main chat function — search-first approach:
@@ -197,6 +198,11 @@ async def chat(
     # Session management
     session = await get_or_create_session(db, user_id, brand_id, session_id)
     history = await get_session_history(db, session.session_id)
+
+    # If no internal history, use external history from the frontend.
+    # This allows multi-turn context (model from previous turns, etc.).
+    if not history and external_history:
+        history = external_history
 
     # Save user message
     user_msg = ChatMessage(
