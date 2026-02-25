@@ -26,9 +26,11 @@ SPECIFIC_INDICATORS = [
 ]
 
 MODEL_CODE_PATTERNS = [
-    r"\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b",  # OVF10, XO 508, GEN2, ADV-210
+    r"\b[a-z]{1,5}\s?-?\s?\d{1,5}[a-z]?\b",  # OVF10, XO 508, GEN2, LCB1, LCB2, RCB2, ADV-210
     r"\b\d{3,5}[a-z]{0,3}\b",                 # 560, 210dp
     r"\bgen\s?\d\b",                         # gen2, gen 2
+    r"\b[a-z]{3}\d{4,}[a-z]*\b",              # JAA30171AAA, BAA21000S (Otis part numbers)
+    r"\b(lcb[i12]|rcb\d|gscb|tcbc)\b",         # Otis boards: LCBI, LCB1, LCB2, RCB2
 ]
 
 TECHNICAL_QUESTION_HINTS = [

@@ -46,9 +46,10 @@ def _has_explicit_model_identifier(text: str) -> bool:
     if not q:
         return False
     patterns = [
-        r"\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b",  # OVF10, XO 508, ADV-210
+        r"\b[a-z]{1,5}\s?-?\s?\d{1,5}[a-z]?\b",  # OVF10, XO 508, LCB1, LCB2, RCB2, ADV-210
         r"\b(gen\s?\d|g\d)\b",                    # gen2, g3
-        r"\b(lcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b",
+        r"\b(lcb[i12]|rcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b",  # Otis boards
+        r"\b[a-z]{3}\d{4,}[a-z]*\b",              # JAA30171AAA, BAA21000S (Otis part numbers)
     ]
     return any(re.search(p, q, re.IGNORECASE) for p in patterns)
 
