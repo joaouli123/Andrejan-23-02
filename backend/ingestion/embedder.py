@@ -38,6 +38,18 @@ FAULT_CODE_HINTS = {
 }
 FAULT_CODE_PATTERN = re.compile(r"\b[A-Z]{1,4}\d{0,3}\b")
 
+DOMAIN_TOPIC_PATTERNS: dict[str, str] = {
+    "porta": r"\b(porta|dw|dfc|intertrav|trinco)\b",
+    "seguranca": r"\b(seguran[cç]a|es|cadeia\s+de\s+seguran[cç]a)\b",
+    "controle": r"\b(controlador|controle|placa|m[oó]dulo|i\/o|cpu)\b",
+    "drive": r"\b(drive|inversor|vetorial|vfd|ovf|cfw)\b",
+    "resgate": r"\b(resgate|emerg[êe]ncia|automa[çc][aã]o\s+de\s+resgate)\b",
+    "parametros": r"\b(par[aâ]metro|parametriza[çc][aã]o|ajuste|calibra[çc][aã]o)\b",
+    "eletrico": r"\b(diagrama|esquema|liga[çc][aã]o|borne|fiao|aterramento)\b",
+}
+
+CONTROLLER_CODE_PATTERN = re.compile(r"\b[A-Z]{2,6}\d{1,5}[A-Z]{0,3}\b")
+
 
 def _contains_fault_code(text: str) -> bool:
     if not text:
@@ -169,6 +181,68 @@ def _extract_query_fault_tokens(query: str) -> list[str]:
             seen.add(token)
             unique.append(token)
     return unique
+
+
+def _extract_domain_signals(text: str) -> dict:
+    """Extract technical signals from chunk text to improve retrieval on weak filenames."""
+    raw = (text or "")[:6000]
+    if not raw:
+        return {"topics": [], "controller_tokens": [], "fault_tokens": []}
+
+    normalized = _normalize_for_matching(raw)
+    upper_text = raw.upper()
+
+    topics: list[str] = []
+    for topic, pattern in DOMAIN_TOPIC_PATTERNS.items():
+        if re.search(pattern, normalized, re.IGNORECASE):
+            topics.append(topic)
+
+    controller_tokens: list[str] = []
+    for token in CONTROLLER_CODE_PATTERN.findall(upper_text):
+        token = token.strip().upper()
+        if len(token) < 3:
+            continue
+        if token in {"HTTP", "HTTPS", "PAGE", "PDF"}:
+            continue
+        controller_tokens.append(token)
+
+    fault_tokens = _extract_query_fault_tokens(raw)
+
+    # Dedupe preserving order and keep payload compact
+    controller_tokens = list(dict.fromkeys(controller_tokens))[:20]
+    fault_tokens = list(dict.fromkeys(fault_tokens))[:20]
+    topics = list(dict.fromkeys(topics))[:12]
+
+    return {
+        "topics": topics,
+        "controller_tokens": controller_tokens,
+        "fault_tokens": fault_tokens,
+    }
+
+
+def _signal_match_bonus(signals: dict, query: str) -> float:
+    if not signals or not query:
+        return 0.0
+
+    bonus = 0.0
+    q_norm = _normalize_for_matching(query)
+    q_upper = query.upper()
+
+    for topic in signals.get("topics", []) or []:
+        if topic and topic in q_norm:
+            bonus += 0.04
+
+    for token in signals.get("controller_tokens", []) or []:
+        token = str(token or "").upper().strip()
+        if token and token in q_upper:
+            bonus += 0.07
+
+    for token in signals.get("fault_tokens", []) or []:
+        token = str(token or "").upper().strip()
+        if token and token in q_upper:
+            bonus += 0.06
+
+    return min(bonus, 0.26)
 
 
 def _lexical_fault_bonus(text: str, tokens: list[str]) -> float:
@@ -548,6 +622,7 @@ def upsert_page(
 
     for index, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
         point_id = str(uuid.uuid4())
+        signals = _extract_domain_signals(chunk_text)
         points.append(
             PointStruct(
                 id=point_id,
@@ -558,6 +633,7 @@ def upsert_page(
                     "doc_filename": doc_filename,
                     "page_number": page_number,
                     "text": chunk_text,
+                    "signals": signals,
                     "chunk_index": index,
                     "chunk_total": chunk_total,
                 },
@@ -754,10 +830,12 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
         payload = hit.payload or {}
         payload_text = payload.get("text", "")
         doc_filename = payload.get("doc_filename", "")
+        signal_bonus = _signal_match_bonus(payload.get("signals") or {}, query)
         boosted_score = hit.score
         boosted_score += _lexical_fault_bonus(payload_text, fault_tokens)
         boosted_score += _filename_match_bonus(doc_filename, query)
         boosted_score += _content_keyword_bonus(payload_text, search_keywords)
+        boosted_score += signal_bonus
         chunks.append({
             "text": payload_text,
             "source": doc_filename,
@@ -791,6 +869,8 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
                 if len(diverse_chunks) >= top_k:
                     break
 
+    # Hard safety: never return chunks outside requested brand
+    diverse_chunks = [c for c in diverse_chunks if c.get("brand_slug") == brand_slug]
     return diverse_chunks
 
 
