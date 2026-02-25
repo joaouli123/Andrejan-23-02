@@ -62,6 +62,9 @@ REGRAS FUNDAMENTAIS:
 11. Se o conteúdo encontrado parece ser de um modelo/equipamento DIFERENTE do perguntado,
     informe isso claramente. Exemplo: "Encontrei informações sobre o OVF20, mas não sobre o OVF10.
     Deseja ver as informações do OVF20?"
+12. Quando houver muitos modelos antigos e novos, diferencie explicitamente por **modelo, geração/série e placa/controlador**.
+13. Se houver risco de confusão entre versões (ex: Gen1, Gen2, revisão de placa), destaque essa diferença antes do procedimento.
+14. Se faltar identificação técnica mínima, faça uma pergunta curta e objetiva antes de recomendar ações.
 
 FORMATAÇÃO OBRIGATÓRIA (Markdown):
 - Use **negrito** para termos-chave, nomes de componentes e ações importantes.
@@ -105,6 +108,7 @@ mas a pergunta dele pode se aplicar a vários modelos.
 
 REGRAS OBRIGATÓRIAS:
 1. Faça UMA pergunta curta para identificar o modelo/placa/equipamento exato.
+1.1 Sempre que possível, peça também geração/série para separar modelos antigos e novos.
 2. A pergunta DEVE ser uma frase completa que TERMINA com "?"
 3. NÃO use parênteses, NÃO dê exemplos dentro de parênteses.
 4. Se quiser listar opções, use "como" ou "por exemplo" seguido dos nomes separados por vírgula, e TERMINE com "?"
@@ -162,8 +166,8 @@ def _normalize_assistant_text(text: str) -> str:
 
 def _default_clarification_question(brand_name: str) -> str:
     return (
-        f"Para eu te ajudar com precisão em {brand_name}, me informe o modelo exato do elevador "
-        "(como aparece na etiqueta) e o código/erro exibido no painel, se houver."
+        f"Para eu te responder com precisão em {brand_name}, me confirme o modelo/geração do elevador "
+        "(como aparece na etiqueta), a placa/controlador e o código de erro, se houver."
     )
 
 

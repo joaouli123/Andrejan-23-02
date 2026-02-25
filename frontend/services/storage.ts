@@ -782,6 +782,33 @@ export const createNewSession = (agentId: string): ChatSession => {
     const agents = getAgents();
     const agent = agents.find(a => a.id === agentId);
     const agentName = agent?.name || 'Assistente';
+    const quotaStatus = getUserQueryQuotaStatus(user);
+    const quotaLabel = quotaStatus.limit === 'Infinity'
+        ? 'No seu plano, você tem **consultas ilimitadas**.'
+        : `No plano **${quotaStatus.plan}**, você pode fazer **${quotaStatus.limit} consulta${Number(quotaStatus.limit) === 1 ? '' : 's'} a cada 24h**.`;
+
+    const welcomeMessage: Message = {
+        id: generateUuid(),
+        role: 'model',
+        timestamp: new Date().toISOString(),
+        text: [
+            `Olá! Eu sou o **${agentName}**, seu assistente técnico em elevadores.`,
+            '',
+            'Posso te ajudar com falhas, códigos de erro, parametrização e procedimentos com base nos manuais processados.',
+            '',
+            quotaLabel,
+            '',
+            'Para respostas mais precisas, me envie neste formato:',
+            '- **Fabricante + modelo/geração + placa/módulo**',
+            '- **Sintoma + código de erro** (se houver)',
+            '- **Tipo de procedimento** (ex.: ajuste, calibração, ligação, inspeção)',
+            '',
+            '**Exemplos**',
+            '- TKE OVF10 Gen2 erro E015',
+            '- WEG CFW11 falha E0X na partida',
+            '- APR acesso ao poço no modelo MRL',
+        ].join('\n'),
+    };
     
     const newSession: ChatSession = {
         id: generateUuid(),
@@ -789,9 +816,9 @@ export const createNewSession = (agentId: string): ChatSession => {
         agentId,
         title: `Conversa com ${agentName}`,
         lastMessageAt: new Date().toISOString(),
-        preview: 'Nova conversa iniciada',
+        preview: 'Assistente pronto para diagnóstico técnico',
         isArchived: false,
-        messages: []
+        messages: [welcomeMessage]
     };
     
     saveChat(newSession);

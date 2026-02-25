@@ -104,11 +104,21 @@ async def chat(
     # --- Step 0: Mandatory model/board/code clarification gate ---
     # If technical question lacks identifying info, always ask first.
     if should_require_model_clarification(query, history):
-        clarification = (
-            "Para te responder com precisão, me informe primeiro o **modelo do elevador** "
-            "(como aparece na etiqueta) e, se tiver, o **código da placa/controlador** "
-            "ou **código de falha** exibido."
-        )
+        if len(history) == 0:
+            clarification = (
+                f"Olá! Eu sou seu assistente técnico da **{brand_name}**.\n\n"
+                "Para te responder com precisão (inclusive em modelos antigos e novos), preciso destes dados:\n"
+                "1. **Modelo/geração** do elevador (como na etiqueta)\n"
+                "2. **Placa/controlador**\n"
+                "3. **Código de erro** e sintoma observado\n\n"
+                "Exemplo: **OVF10 Gen2, placa C.07.10, erro E015, porta abre e fecha e não parte**."
+            )
+        else:
+            clarification = (
+                "Para te responder com precisão, me informe primeiro o **modelo/geração do elevador** "
+                "(como aparece na etiqueta) e, se tiver, a **placa/controlador** "
+                "e o **código de falha** exibido."
+            )
         asst_msg = ChatMessage(
             session_id=session.id,
             role="assistant",
