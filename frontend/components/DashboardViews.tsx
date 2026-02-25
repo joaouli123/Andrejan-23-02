@@ -17,6 +17,9 @@ const WaveChart = ({ data, color, height = 120, formatValue }: { data: { label: 
   const max = Math.max(...data.map(d => d.value)) || 1;
   const min = 0;
   const range = Math.max(1, max - min);
+  const pointCount = data.length;
+  const showMarkers = pointCount <= 12;
+  const gradientId = `grad-${color.replace('#', '')}-${pointCount}`;
   
   const pathData = `M 0,100 L 0,${100 - ((data[0].value - min) / range) * 100} ` + 
     data.map((d, i) => {
@@ -47,18 +50,24 @@ const WaveChart = ({ data, color, height = 120, formatValue }: { data: { label: 
       <div className="relative w-full flex-1" style={{ height }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
           <defs>
-            <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" x2="0" y1="0" y2="1">
+            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.4" />
               <stop offset="100%" stopColor={color} stopOpacity="0.0" />
             </linearGradient>
           </defs>
-          <path d={pathData} fill={`url(#grad-${color.replace('#', '')})`} />
-          <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          {data.map((d, i) => {
+          <line x1="0" y1="100" x2="100" y2="100" stroke="#e2e8f0" strokeWidth="0.6" />
+          <line x1="0" y1="66" x2="100" y2="66" stroke="#f1f5f9" strokeWidth="0.5" strokeDasharray="2 2" />
+          <line x1="0" y1="33" x2="100" y2="33" stroke="#f1f5f9" strokeWidth="0.5" strokeDasharray="2 2" />
+          <path d={pathData} fill={`url(#${gradientId})`} />
+          <path d={linePath} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          {showMarkers && data.map((d, i) => {
             const x = (i / (data.length - 1 || 1)) * 100;
             const y = 100 - ((d.value - min) / range) * 100;
             return (
-              <circle key={i} cx={x} cy={y} r="2" fill="white" stroke={color} strokeWidth="1" className="transition-all hover:r-3 cursor-pointer" />
+              <g key={i}>
+                <circle cx={x} cy={y} r="2.8" fill={color} fillOpacity="0.18" />
+                <circle cx={x} cy={y} r="1.45" fill="white" stroke={color} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+              </g>
             );
           })}
         </svg>

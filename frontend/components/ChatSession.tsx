@@ -172,7 +172,7 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
       return;
     }
 
-    // A partir daqui, é consulta RAG → consome crédito
+    // A partir daqui, é consulta RAG. Débito ocorre somente após resposta útil.
     const consumption = Storage.consumeUserQueryCredit();
     setQuotaStatus(consumption.status);
     if (!consumption.allowed) {
@@ -195,6 +195,7 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
       onSessionUpdate();
       return;
     }
+    let shouldRefundCredit = true;
 
     const isLikelyModelOnlyMessage = (text: string) => {
       const t = String(text || '').trim();
@@ -267,7 +268,14 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
       timestamp: new Date().toISOString()
     };
 
-    const asksForModel = /\b(modelo exato|qual\s+e\s+o\s+modelo|me\s+confirme.*modelo)\b/i.test(responseText);
+    const asksForModel = /\b(modelo exato|qual\s+e\s+o\s+modelo|me\s+confirme.*modelo|me\s+informe\s+o\s+modelo|preciso\s+do\s+modelo)\b/i.test(responseText);
+    const notFoundPatterns = [
+      /n[aã]o\s+encontrei\s+informa[cç][õo]es\s+relevantes/i,
+      /n[aã]o\s+encontrei\s+na\s+base\s+de\s+conhecimento/i,
+      /sem\s+dados\s+suficientes/i,
+      /n[aã]o\s+foi\s+poss[ií]vel\s+localizar/i,
+    ];
+    const isNotFoundReply = notFoundPatterns.some(pattern => pattern.test(responseText));
 
     const finalSession: ChatSession = {
       ...updatedSession,
@@ -282,10 +290,36 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
 
     setSession(finalSession);
     Storage.saveSession(finalSession);
+    shouldRefundCredit = asksForModel || isNotFoundReply;
+    if (shouldRefundCredit) {
+      Storage.refundUserQueryCredit();
+    }
     setQuotaStatus(Storage.getUserQueryQuotaStatus());
     onSessionUpdate();
     setIsLoading(false);
+    } catch (error) {
+      Storage.refundUserQueryCredit();
+
+      const fallbackMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: 'model',
+        text: '❌ Não consegui processar sua pergunta agora. Nenhuma consulta foi descontada. Tente novamente em alguns segundos.',
+        timestamp: new Date().toISOString(),
+      };
+
+      const errorSession: ChatSession = {
+        ...session,
+        messages: [...session.messages, fallbackMessage],
+        lastMessageAt: new Date().toISOString(),
+        preview: fallbackMessage.text.substring(0, 90),
+      };
+
+      setSession(errorSession);
+      Storage.saveSession(errorSession);
+      setQuotaStatus(Storage.getUserQueryQuotaStatus());
+      onSessionUpdate();
     } finally {
+      setIsLoading(false);
       sendingRef.current = false;
     }
   };

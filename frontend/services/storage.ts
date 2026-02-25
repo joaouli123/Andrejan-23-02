@@ -450,6 +450,29 @@ export const consumeUserQueryCredit = (profile?: UserProfile | null): { allowed:
     return { allowed: true, status: refreshed };
 };
 
+export const refundUserQueryCredit = (profile?: UserProfile | null): UserQueryQuotaStatus => {
+    const user = profile || getUserProfile();
+    const status = getUserQueryQuotaStatus(user);
+    if (!user) return status;
+
+    const usageMap = getQueryUsageMap();
+    const current = usageMap[user.id];
+    if (!current) return status;
+
+    const nextUsed = Math.max(0, Number(current.used || 0) - 1);
+    usageMap[user.id] = {
+        windowStart: current.windowStart,
+        used: nextUsed,
+    };
+    saveQueryUsageMap(usageMap);
+
+    const refreshed = getUserQueryQuotaStatus(user);
+    const normalized = normalizeProfileQuotaFields({ ...user, creditsUsed: refreshed.used, creditsLimit: refreshed.limit });
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+    upsertAdminUser(normalized);
+    return refreshed;
+};
+
 export const applyPlanToCurrentUser = (plan: UserProfile['plan']) => {
     const user = getUserProfile();
     if (!user) return null;
