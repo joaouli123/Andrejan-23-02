@@ -49,6 +49,7 @@ DOMAIN_TOPIC_PATTERNS: dict[str, str] = {
 }
 
 CONTROLLER_CODE_PATTERN = re.compile(r"\b[A-Z]{2,6}\d{1,5}[A-Z]{0,3}\b")
+MODEL_VERSION_PATTERN = re.compile(r"\b(?:GEN\s?\d|G\d|V\d{1,2}|VERS[AÃ]O\s?\d{1,2})\b", re.IGNORECASE)
 
 
 def _contains_fault_code(text: str) -> bool:
@@ -212,11 +213,13 @@ def _extract_domain_signals(text: str) -> dict:
     controller_tokens = list(dict.fromkeys(controller_tokens))[:20]
     fault_tokens = list(dict.fromkeys(fault_tokens))[:20]
     topics = list(dict.fromkeys(topics))[:12]
+    model_version_tokens = list(dict.fromkeys([m.group(0).upper().replace(" ", "") for m in MODEL_VERSION_PATTERN.finditer(raw)]))[:20]
 
     return {
         "topics": topics,
         "controller_tokens": controller_tokens,
         "fault_tokens": fault_tokens,
+        "model_version_tokens": model_version_tokens,
     }
 
 
@@ -243,6 +246,65 @@ def _signal_match_bonus(signals: dict, query: str) -> float:
             bonus += 0.06
 
     return min(bonus, 0.26)
+
+
+def _extract_query_identifiers(query: str) -> list[str]:
+    """Identifiers that should anchor retrieval in multi-model manuals."""
+    ids: list[str] = []
+
+    # Reuse structured keyword extraction
+    for kw in _extract_search_keywords(query):
+        cleaned = re.sub(r"[^A-Za-z0-9]", "", kw).upper()
+        if len(cleaned) >= 3:
+            ids.append(cleaned)
+
+    # Add explicit model/version-like markers
+    for match in MODEL_VERSION_PATTERN.finditer(query or ""):
+        cleaned = re.sub(r"[^A-Za-z0-9]", "", match.group(0)).upper()
+        if cleaned:
+            ids.append(cleaned)
+
+    # Dedupe
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in ids:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique[:24]
+
+
+def _identifier_focus_score(payload: dict, query_identifiers: list[str]) -> tuple[float, bool]:
+    """
+    Returns (bonus_or_penalty, has_identifier_hit).
+    Penalizes chunks without identifier match when the query contains explicit identifiers.
+    """
+    if not query_identifiers:
+        return 0.0, False
+
+    text = str(payload.get("text", "") or "")
+    source = str(payload.get("doc_filename", "") or "")
+    combined = f"{text} {source}".upper()
+    compact_combined = re.sub(r"[^A-Z0-9]", "", combined)
+
+    signals = payload.get("signals") or {}
+    signal_tokens = []
+    for key in ("controller_tokens", "fault_tokens", "model_version_tokens"):
+        vals = signals.get(key) or []
+        signal_tokens.extend([re.sub(r"[^A-Z0-9]", "", str(v).upper()) for v in vals])
+
+    signal_set = {token for token in signal_tokens if token}
+
+    hits = 0
+    for identifier in query_identifiers:
+        if identifier in compact_combined or identifier in signal_set:
+            hits += 1
+
+    if hits > 0:
+        return min(0.06 + (hits * 0.03), 0.24), True
+
+    # Query is specific, chunk does not mention those IDs -> mild penalty
+    return -0.10, False
 
 
 def _lexical_fault_bonus(text: str, tokens: list[str]) -> float:
@@ -737,6 +799,7 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
     query_vector = get_query_embedding(query)
     fault_tokens = _extract_query_fault_tokens(query)
     search_keywords = _extract_search_keywords(query)
+    query_identifiers = _extract_query_identifiers(query)
 
     logger.info(f"Search '{query}' | keywords={search_keywords} | fault_tokens={fault_tokens}")
 
@@ -831,11 +894,13 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
         payload_text = payload.get("text", "")
         doc_filename = payload.get("doc_filename", "")
         signal_bonus = _signal_match_bonus(payload.get("signals") or {}, query)
+        identifier_bonus, has_identifier_hit = _identifier_focus_score(payload, query_identifiers)
         boosted_score = hit.score
         boosted_score += _lexical_fault_bonus(payload_text, fault_tokens)
         boosted_score += _filename_match_bonus(doc_filename, query)
         boosted_score += _content_keyword_bonus(payload_text, search_keywords)
         boosted_score += signal_bonus
+        boosted_score += identifier_bonus
         chunks.append({
             "text": payload_text,
             "source": doc_filename,
@@ -843,9 +908,16 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
             "doc_id": payload.get("doc_id", 0),
             "brand_slug": payload.get("brand_slug", ""),
             "score": boosted_score,
+            "identifier_hit": has_identifier_hit,
         })
 
     chunks.sort(key=lambda item: item["score"], reverse=True)
+
+    # If query contains explicit identifiers, prefer chunks that actually contain them.
+    if query_identifiers:
+        id_matched = [c for c in chunks if c.get("identifier_hit")]
+        if len(id_matched) >= max(2, top_k // 2):
+            chunks = id_matched + [c for c in chunks if not c.get("identifier_hit")]
 
     # Document diversity: ensure no single document dominates results.
     MAX_PER_DOC = 3
@@ -871,6 +943,8 @@ def search_brand(brand_slug: str, query: str, top_k: int = 7) -> list[dict]:
 
     # Hard safety: never return chunks outside requested brand
     diverse_chunks = [c for c in diverse_chunks if c.get("brand_slug") == brand_slug]
+    for c in diverse_chunks:
+        c.pop("identifier_hit", None)
     return diverse_chunks
 
 
