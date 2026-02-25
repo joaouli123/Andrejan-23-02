@@ -116,10 +116,20 @@ type SupabaseChatSessionRow = {
 type SupabaseMessageRow = {
     id: string;
     session_id: string;
-    role: 'user' | 'model' | null;
+    role: 'user' | 'model' | 'assistant' | null;
     text: string | null;
     timestamp?: string | null;
     created_at?: string | null;
+};
+
+const MESSAGE_TABLES: Array<'messages' | 'chat_messages'> = ['messages', 'chat_messages'];
+
+const mapRoleToDatabase = (role: Message['role']): 'user' | 'assistant' => {
+    return role === 'user' ? 'user' : 'assistant';
+};
+
+const mapRoleToApp = (role?: string | null): Message['role'] => {
+    return role === 'user' ? 'user' : 'model';
 };
 
 const isUuid = (value?: string | null) => UUID_REGEX.test(String(value || ''));
@@ -517,28 +527,32 @@ const saveChatToDatabase = async (chat: ChatSession): Promise<void> => {
     const { error: upsertError } = await supabase.from('chat_sessions').upsert([sessionPayload]);
     if (upsertError) return;
 
-    await supabase.from('messages').delete().eq('session_id', dbSessionId);
-    if (!Array.isArray(chat.messages) || chat.messages.length === 0) return;
+    for (const tableName of MESSAGE_TABLES) {
+        const { error: deleteError } = await supabase.from(tableName).delete().eq('session_id', dbSessionId);
+        if (deleteError) continue;
 
-    const baseMessages = chat.messages.map(message => ({
-        session_id: dbSessionId,
-        role: message.role,
-        text: message.text,
-        timestamp: message.timestamp,
-    }));
+        if (!Array.isArray(chat.messages) || chat.messages.length === 0) return;
 
-    let { error: messageError } = await supabase.from('messages').insert(baseMessages);
-    if (!messageError) return;
+        const baseMessages = chat.messages.map(message => ({
+            session_id: dbSessionId,
+            role: mapRoleToDatabase(message.role),
+            text: message.text,
+            timestamp: message.timestamp,
+        }));
 
-    // Compatibilidade com schema antigo (created_at ao invés de timestamp)
-    const fallbackMessages = chat.messages.map(message => ({
-        session_id: dbSessionId,
-        role: message.role,
-        text: message.text,
-        created_at: message.timestamp,
-    }));
+        let { error: messageError } = await supabase.from(tableName).insert(baseMessages);
+        if (!messageError) return;
 
-    await supabase.from('messages').insert(fallbackMessages);
+        const fallbackMessages = chat.messages.map(message => ({
+            session_id: dbSessionId,
+            role: mapRoleToDatabase(message.role),
+            text: message.text,
+            created_at: message.timestamp,
+        }));
+
+        ({ error: messageError } = await supabase.from(tableName).insert(fallbackMessages));
+        if (!messageError) return;
+    }
 };
 
 const deleteChatFromDatabase = async (sessionId: string): Promise<void> => {
@@ -549,19 +563,25 @@ const deleteChatFromDatabase = async (sessionId: string): Promise<void> => {
 const fetchMessagesForSessions = async (sessionIds: string[]): Promise<SupabaseMessageRow[]> => {
     if (!sessionIds.length) return [];
 
-    const first = await supabase
-        .from('messages')
-        .select('id,session_id,role,text,timestamp')
-        .in('session_id', sessionIds);
+    for (const tableName of MESSAGE_TABLES) {
+        const first = await supabase
+            .from(tableName)
+            .select('id,session_id,role,text,timestamp')
+            .in('session_id', sessionIds);
 
-    if (!first.error && first.data) return first.data as SupabaseMessageRow[];
+        if (!first.error && first.data && first.data.length > 0) {
+            return first.data as SupabaseMessageRow[];
+        }
 
-    const fallback = await supabase
-        .from('messages')
-        .select('id,session_id,role,text,created_at')
-        .in('session_id', sessionIds);
+        const fallback = await supabase
+            .from(tableName)
+            .select('id,session_id,role,text,created_at')
+            .in('session_id', sessionIds);
 
-    if (!fallback.error && fallback.data) return fallback.data as SupabaseMessageRow[];
+        if (!fallback.error && fallback.data && fallback.data.length > 0) {
+            return fallback.data as SupabaseMessageRow[];
+        }
+    }
     return [];
 };
 
@@ -596,7 +616,7 @@ export const syncChatsFromDatabase = async (force = false): Promise<ChatSession[
                 if (!sessionId) continue;
                 const entry: Message = {
                     id: row.id || generateUuid(),
-                    role: row.role === 'user' ? 'user' : 'model',
+                    role: mapRoleToApp(row.role),
                     text: String(row.text || ''),
                     timestamp: String(row.timestamp || row.created_at || new Date().toISOString()),
                 };

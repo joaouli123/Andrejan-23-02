@@ -128,6 +128,31 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
       return found?.id || null;
     };
 
+    const isGreetingOnly = (text: string) => {
+      const normalized = String(text || '').toLowerCase().replace(/[!?.]/g, ' ').replace(/\s+/g, ' ').trim();
+      const greetings = new Set(['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'e ai', 'e aí']);
+      return greetings.has(normalized);
+    };
+
+    const hasModelIdentifier = (text: string) => {
+      const t = String(text || '').trim();
+      if (!t) return false;
+      return [
+        /\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b/i,
+        /\b(gen\s?\d|g\d)\b/i,
+        /\b(lcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b/i,
+      ].some(pattern => pattern.test(t));
+    };
+
+    const isTechnicalWithoutId = (text: string) => {
+      const t = String(text || '').trim();
+      if (!t) return false;
+      const technical = [
+        /\b(falha|erro|defeito|problema|n[aã]o\s+fecha|n[aã]o\s+abre|n[aã]o\s+parte|porta|trinco|intertrav)\b/i,
+      ].some(pattern => pattern.test(t));
+      return technical && !hasModelIdentifier(t) && !session.knownModel;
+    };
+
     // Atalho local: listar modelos cadastrados (não consome crédito, não chama RAG)
     if (isModelsListQuestion(userText)) {
       const userMessage: Message = {
@@ -163,6 +188,65 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
         messages: [...session.messages, userMessage, modelMessage],
         lastMessageAt: new Date().toISOString(),
         preview: userText.substring(0, 50) + (userText.length > 50 ? '...' : ''),
+      };
+
+      setSession(nextSession);
+      Storage.saveSession(nextSession);
+      onSessionUpdate();
+      setInput('');
+      return;
+    }
+
+    if (isGreetingOnly(userText)) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: userText,
+        timestamp: new Date().toISOString(),
+      };
+
+      const greetMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: `Olá! 👋 Boa tarde. Para eu te ajudar com precisão, me informe **modelo/geração**, **placa/controlador** e o **sintoma ou código de erro**.`,
+        timestamp: new Date().toISOString(),
+      };
+
+      const nextSession: ChatSession = {
+        ...session,
+        messages: [...session.messages, userMessage, greetMessage],
+        lastMessageAt: new Date().toISOString(),
+        preview: userText.substring(0, 50) + (userText.length > 50 ? '...' : ''),
+      };
+
+      setSession(nextSession);
+      Storage.saveSession(nextSession);
+      onSessionUpdate();
+      setInput('');
+      return;
+    }
+
+    if (isTechnicalWithoutId(userText)) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: userText,
+        timestamp: new Date().toISOString(),
+      };
+
+      const askModelMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: `Antes de eu fechar o diagnóstico, confirme por favor: **modelo/geração** e **placa/controlador** (ex.: LCB1, LCB2, TCBC, GSCB). Sem isso posso misturar versões diferentes.`,
+        timestamp: new Date().toISOString(),
+      };
+
+      const nextSession: ChatSession = {
+        ...session,
+        messages: [...session.messages, userMessage, askModelMessage],
+        lastMessageAt: new Date().toISOString(),
+        preview: userText.substring(0, 50) + (userText.length > 50 ? '...' : ''),
+        pendingUserQuestion: userText,
       };
 
       setSession(nextSession);
