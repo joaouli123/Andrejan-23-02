@@ -41,6 +41,18 @@ def _is_door_cycle_no_start_symptom(query: str) -> bool:
     return has_door and (has_cycle or has_no_start)
 
 
+def _has_explicit_model_identifier(text: str) -> bool:
+    q = (text or "").strip()
+    if not q:
+        return False
+    patterns = [
+        r"\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b",  # OVF10, XO 508, ADV-210
+        r"\b(gen\s?\d|g\d)\b",                    # gen2, g3
+        r"\b(lcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b",
+    ]
+    return any(re.search(p, q, re.IGNORECASE) for p in patterns)
+
+
 def _expand_brand_query_terms(query: str, brand_name: str) -> str:
     """Add high-value brand-specific aliases to improve retrieval precision."""
     base_query = (query or "").strip()
@@ -337,6 +349,30 @@ async def chat(
         f"docs={len(confidence['unique_docs'])}, "
         f"spread={confidence['score_spread']:.3f})"
     )
+
+    # --- Guardrail: never lock into a specific model if user did not provide one ---
+    if not _has_explicit_model_identifier(enriched_query):
+        unique_docs = confidence.get("unique_docs", [])
+        top_score = float(confidence.get("top_score", 0.0) or 0.0)
+        if len(unique_docs) >= 2 or top_score < 0.90:
+            model_guard = (
+                "Antes de eu fechar o diagnóstico, me confirme o **modelo/geração** e a **placa/controlador** "
+                "(ex.: LCB1, LCB2, TCBC, GSCB). Sem isso eu posso cruzar versões diferentes e te passar um procedimento errado."
+            )
+            asst_msg = ChatMessage(
+                session_id=session.id,
+                role="assistant",
+                content=model_guard,
+                sources=json.dumps([]),
+            )
+            db.add(asst_msg)
+            await db.commit()
+            return {
+                "session_id": session.session_id,
+                "answer": model_guard,
+                "sources": [],
+                "needs_clarification": True,
+            }
 
     # --- Step 5: Smart clarification if results are ambiguous ---
     # Only ask clarification if we haven't asked recently (avoid loops)

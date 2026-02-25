@@ -34,6 +34,8 @@ MODEL_CODE_PATTERNS = [
 TECHNICAL_QUESTION_HINTS = [
     r"\bfalha\b", r"\berro\b", r"\bc[oó]digo\b", r"\bdefeito\b", r"\bproblema\b",
     r"\bn[aã]o\s+funciona\b", r"\bn[aã]o\s+liga\b", r"\bn[aã]o\s+sobe\b", r"\bn[aã]o\s+desce\b",
+    r"\bn[aã]o\s+fecha\b", r"\bn[aã]o\s+abre\b", r"\babre\s+e\s+fecha\b",
+    r"\bporta\b", r"\btrinco\b", r"\bintertrav\b", r"\bdw\b", r"\bdfc\b", r"\bes\b",
     r"\bliga[cç][aã]o\b", r"\besquema\b", r"\bplaca\b", r"\bdrive\b", r"\binversor\b",
     r"\bcalibra[cç][aã]o\b", r"\bajuste\b", r"\bparametr", r"\bconfigura", r"\bmanual\b",
 ]
