@@ -45,7 +45,7 @@ const Header: React.FC<HeaderProps> = ({ currentView = 'landing', onNavigateHome
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center space-x-8">
             {currentView === 'landing' && (
-              <div className="flex items-center space-x-8 bg-white/50 px-6 py-2 rounded-full border border-slate-100 backdrop-blur-sm shadow-sm">
+              <div className="flex items-center space-x-8 bg-slate-50/80 px-6 py-2.5 rounded-full border border-slate-200/60 backdrop-blur-md shadow-sm">
                 <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={navLinkClass}>Início</a>
                 <a href="#features" className={navLinkClass}>O que é</a>
                 <a href="#audience" className={navLinkClass}>Para quem</a>

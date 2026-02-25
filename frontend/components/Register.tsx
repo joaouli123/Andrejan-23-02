@@ -55,30 +55,30 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
     <div className='min-h-screen bg-slate-50 flex'>
       {/* Left Side - Form */}
       <div className='flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24'>
-        <div className='mx-auto w-full max-w-sm lg:w-96'>
+        <div className='mx-auto w-full max-w-md lg:w-[400px]'>
           <button 
             onClick={onBack}
-            className='flex items-center text-slate-600 hover:text-slate-900 mb-8 transition-colors'
+            className='inline-flex items-center text-sm font-medium text-slate-500 hover:text-blue-600 mb-8 transition-colors bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow'
           >
             <ArrowLeft className='h-4 w-4 mr-2' />
-            Voltar
+            Voltar aos planos
           </button>
           
           <div>
-            <h2 className='mt-6 text-3xl font-extrabold text-slate-900'>Crie sua conta</h2>
-            <p className='mt-2 text-sm text-slate-600'>
-              Para assinar o plano <span className='font-bold text-blue-600'>{plan.name}</span>
+            <h2 className='text-3xl font-extrabold text-slate-900 tracking-tight'>Crie sua conta</h2>
+            <p className='mt-2 text-base text-slate-600'>
+              Você está assinando o plano <span className='font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md'>{plan.name}</span>
             </p>
           </div>
 
-          <div className='mt-8'>
-            <form onSubmit={handleSubmit} className='space-y-6'>
+          <div className='mt-10'>
+            <form onSubmit={handleSubmit} className='space-y-5'>
               <div>
-                <label htmlFor='name' className='block text-sm font-medium text-slate-700'>
+                <label htmlFor='name' className='block text-sm font-medium text-slate-700 mb-1.5'>
                   Nome completo
                 </label>
-                <div className='mt-1 relative rounded-md shadow-sm'>
-                  <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                <div className='relative rounded-xl shadow-sm'>
+                  <div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none'>
                     <User className='h-5 w-5 text-slate-400' />
                   </div>
                   <input
@@ -89,19 +89,19 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
                     required
                     value={formData.name}
                     onChange={handleChange}
-                    className={`focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-slate-300 rounded-md p-3 border ${errors.name ? 'border-red-300' : ''}`}
+                    className={`block w-full pl-11 pr-4 py-3 sm:text-sm border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white ${errors.name ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
                     placeholder='Seu nome'
                   />
                 </div>
-                {errors.name && <p className='mt-2 text-sm text-red-600'>{errors.name}</p>}
+                {errors.name && <p className='mt-1.5 text-sm text-red-600 font-medium'>{errors.name}</p>}
               </div>
 
               <div>
-                <label htmlFor='email' className='block text-sm font-medium text-slate-700'>
+                <label htmlFor='email' className='block text-sm font-medium text-slate-700 mb-1.5'>
                   Email profissional
                 </label>
-                <div className='mt-1 relative rounded-md shadow-sm'>
-                  <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                <div className='relative rounded-xl shadow-sm'>
+                  <div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none'>
                     <Mail className='h-5 w-5 text-slate-400' />
                   </div>
                   <input
@@ -112,19 +112,19 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    className={`focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-slate-300 rounded-md p-3 border ${errors.email ? 'border-red-300' : ''}`}
+                    className={`block w-full pl-11 pr-4 py-3 sm:text-sm border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white ${errors.email ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
                     placeholder='voce@empresa.com'
                   />
                 </div>
-                {errors.email && <p className='mt-2 text-sm text-red-600'>{errors.email}</p>}
+                {errors.email && <p className='mt-1.5 text-sm text-red-600 font-medium'>{errors.email}</p>}
               </div>
 
               <div>
-                <label htmlFor='company' className='block text-sm font-medium text-slate-700'>
-                  Empresa (Opcional)
+                <label htmlFor='company' className='block text-sm font-medium text-slate-700 mb-1.5'>
+                  Empresa <span className="text-slate-400 font-normal">(Opcional)</span>
                 </label>
-                <div className='mt-1 relative rounded-md shadow-sm'>
-                  <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                <div className='relative rounded-xl shadow-sm'>
+                  <div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none'>
                     <Building className='h-5 w-5 text-slate-400' />
                   </div>
                   <input
@@ -133,18 +133,18 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
                     type='text'
                     value={formData.company}
                     onChange={handleChange}
-                    className='focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-slate-300 rounded-md p-3 border'
+                    className='block w-full pl-11 pr-4 py-3 sm:text-sm border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white'
                     placeholder='Sua empresa'
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor='password' className='block text-sm font-medium text-slate-700'>
+                <label htmlFor='password' className='block text-sm font-medium text-slate-700 mb-1.5'>
                   Senha
                 </label>
-                <div className='mt-1 relative rounded-md shadow-sm'>
-                  <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                <div className='relative rounded-xl shadow-sm'>
+                  <div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none'>
                     <Lock className='h-5 w-5 text-slate-400' />
                   </div>
                   <input
@@ -154,28 +154,28 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
                     required
                     value={formData.password}
                     onChange={handleChange}
-                    className={`focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 pr-10 sm:text-sm border-slate-300 rounded-md p-3 border ${errors.password ? 'border-red-300' : ''}`}
-                    placeholder='******'
+                    className={`block w-full pl-11 pr-12 py-3 sm:text-sm border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white ${errors.password ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
+                    placeholder='••••••••'
                   />
                   <div className='absolute inset-y-0 right-0 pr-3 flex items-center'>
                     <button
                       type='button'
                       onClick={() => setShowPassword(!showPassword)}
-                      className='text-slate-400 hover:text-slate-500 focus:outline-none'
+                      className='text-slate-400 hover:text-blue-600 focus:outline-none p-1 rounded-md transition-colors'
                     >
                       {showPassword ? <EyeOff className='h-5 w-5' /> : <Eye className='h-5 w-5' />}
                     </button>
                   </div>
                 </div>
-                {errors.password && <p className='mt-2 text-sm text-red-600'>{errors.password}</p>}
+                {errors.password && <p className='mt-1.5 text-sm text-red-600 font-medium'>{errors.password}</p>}
               </div>
 
               <div>
-                <label htmlFor='confirmPassword' className='block text-sm font-medium text-slate-700'>
+                <label htmlFor='confirmPassword' className='block text-sm font-medium text-slate-700 mb-1.5'>
                   Confirmar Senha
                 </label>
-                <div className='mt-1 relative rounded-md shadow-sm'>
-                  <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                <div className='relative rounded-xl shadow-sm'>
+                  <div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none'>
                     <Lock className='h-5 w-5 text-slate-400' />
                   </div>
                   <input
@@ -185,20 +185,24 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
                     required
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className={`focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-slate-300 rounded-md p-3 border ${errors.confirmPassword ? 'border-red-300' : ''}`}
-                    placeholder='******'
+                    className={`block w-full pl-11 pr-4 py-3 sm:text-sm border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white ${errors.confirmPassword ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}`}
+                    placeholder='••••••••'
                   />
                 </div>
-                {errors.confirmPassword && <p className='mt-2 text-sm text-red-600'>{errors.confirmPassword}</p>}
+                {errors.confirmPassword && <p className='mt-1.5 text-sm text-red-600 font-medium'>{errors.confirmPassword}</p>}
               </div>
 
-              <div>
+              <div className="pt-4">
                 <button
                   type='submit'
-                  className='w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                  className='w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all transform hover:-translate-y-0.5'
                 >
                   Continuar para Pagamento
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </button>
+                <p className="text-center text-xs text-slate-500 mt-4">
+                  Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade.
+                </p>
               </div>
             </form>
           </div>
@@ -206,29 +210,60 @@ const Register: React.FC<RegisterProps> = ({ plan, onSuccess, onBack }) => {
       </div>
 
       {/* Right Side - Summary */}
-      <div className='hidden lg:block relative flex-1 bg-slate-900'>
-        <div className='absolute inset-0 flex flex-col justify-center items-center text-white p-12'>
-            <div className='max-w-md space-y-8'>
+      <div className='hidden lg:flex relative flex-1 bg-slate-900 overflow-hidden'>
+        {/* Background decorations */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute -top-[20%] -right-[10%] w-[70%] h-[70%] rounded-full bg-blue-600/20 blur-[100px]" />
+          <div className="absolute -bottom-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-cyan-600/20 blur-[100px]" />
+        </div>
+
+        <div className='relative w-full flex flex-col justify-center items-center text-white p-12'>
+            <div className='max-w-md w-full space-y-8'>
                  <div>
-                    <h3 className='text-3xl font-bold'>Você escolheu o plano {plan.name}</h3>
-                    <p className='mt-4 text-slate-300 text-lg'>
-                        Desbloqueie todo o potencial da IA para o seu negócio.
+                    <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold mb-6">
+                      Resumo do Pedido
+                    </div>
+                    <h3 className='text-4xl font-extrabold tracking-tight'>Plano {plan.name}</h3>
+                    <p className='mt-4 text-slate-300 text-lg leading-relaxed'>
+                        Você está a um passo de transformar a manutenção de elevadores na sua empresa.
                     </p>
                  </div>
 
-                 <div className='bg-slate-800 rounded-xl p-6 border border-slate-700'>
-                    <div className='flex justify-between items-center mb-4'>
-                         <span className='text-xl font-semibold'>Total</span>
-                         <span className='text-2xl font-bold'>R$ {plan.price.toFixed(2)}<span className='text-sm font-normal text-slate-400'>/{plan.period}</span></span>
+                 <div className='bg-slate-800/50 backdrop-blur-xl rounded-2xl p-8 border border-slate-700/50 shadow-2xl'>
+                    <div className='flex justify-between items-end mb-6 pb-6 border-b border-slate-700/50'>
+                         <div>
+                           <span className='block text-sm font-medium text-slate-400 mb-1'>Investimento</span>
+                           <span className='text-4xl font-bold text-white'>R$ {plan.price.toFixed(2).replace('.', ',')}</span>
+                           <span className='text-base font-normal text-slate-400 ml-1'>/{plan.period}</span>
+                         </div>
                     </div>
-                    <ul className='space-y-3'>
-                        {plan.features.map((feature, idx) => (
-                            <li key={idx} className='flex items-center text-slate-300'>
-                                <Check className='h-5 w-5 text-green-400 mr-2' />
-                                {feature}
-                            </li>
-                        ))}
-                    </ul>
+                    
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">O que está incluído:</h4>
+                      <ul className='space-y-3'>
+                          {plan.features.map((feature, idx) => (
+                              <li key={idx} className='flex items-start text-slate-300'>
+                                  <div className="flex-shrink-0 mt-0.5 bg-blue-500/20 p-1 rounded-full mr-3">
+                                    <Check className='h-3 w-3 text-blue-400' />
+                                  </div>
+                                  <span className="text-sm leading-relaxed">{feature}</span>
+                              </li>
+                          ))}
+                      </ul>
+                    </div>
+                 </div>
+                 
+                 {/* Trust indicators */}
+                 <div className="flex items-center justify-center gap-6 pt-8 opacity-60">
+                   <div className="flex items-center gap-2">
+                     <Lock className="w-4 h-4" />
+                     <span className="text-xs font-medium">Pagamento Seguro</span>
+                   </div>
+                   <div className="w-1 h-1 rounded-full bg-slate-600"></div>
+                   <div className="flex items-center gap-2">
+                     <Check className="w-4 h-4" />
+                     <span className="text-xs font-medium">Cancelamento Fácil</span>
+                   </div>
                  </div>
             </div>
         </div>

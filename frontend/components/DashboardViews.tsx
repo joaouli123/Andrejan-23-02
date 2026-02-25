@@ -64,6 +64,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onSelect }) => {
 // --- AGENTS GRID ---
 export const AgentsGrid: React.FC<{ user: UserProfile, onSelectAgent: (id: string) => void }> = ({ user, onSelectAgent }) => {
   const [agents, setAgents] = useState<Agent[]>(Storage.getAgents());
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
       const syncAgents = async () => {
@@ -74,28 +75,43 @@ export const AgentsGrid: React.FC<{ user: UserProfile, onSelectAgent: (id: strin
   }, []);
 
   const customAgents = agents.filter(a => a.isCustom || true); // Todos os agentes são tratados igualmente
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredAgents = normalizedSearch
+    ? customAgents.filter(agent =>
+        `${agent.name} ${agent.role} ${agent.description}`.toLowerCase().includes(normalizedSearch)
+      )
+    : customAgents;
 
   return (
     <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-12 custom-scrollbar bg-slate-50">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 sm:mb-10 animate-fade-in">
-          <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-2 sm:gap-3">
-             <span className="p-2 bg-blue-100 text-blue-600 rounded-xl">
-                <Zap className="fill-current w-6 h-6" />
-             </span>
+           <h1 className="text-xl sm:text-3xl font-extrabold text-slate-900">
              Bem vindo, {user.name.split(' ')[0]}
           </h1>
           <p className="text-slate-500 mt-1 sm:mt-2 text-sm sm:text-lg max-w-2xl">Central de Diagnóstico: Selecione o módulo especializado para iniciar o atendimento.</p>
+          <div className="mt-4 sm:mt-5 max-w-xl">
+            <div className="relative">
+              <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Pesquisar agente, marca ou elevador..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Agentes */}
-        {customAgents.length > 0 ? (
+        {filteredAgents.length > 0 ? (
           <div className="mb-8">
             <h3 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 sm:mb-4 flex items-center">
                 <Zap className="w-4 h-4 mr-2" /> Assistentes Técnicos
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 lg:gap-8">
-                {customAgents.map(agent => <AgentCard key={agent.id} agent={agent} onSelect={onSelectAgent} />)}
+                {filteredAgents.map(agent => <AgentCard key={agent.id} agent={agent} onSelect={onSelectAgent} />)}
             </div>
           </div>
         ) : (
@@ -103,8 +119,8 @@ export const AgentsGrid: React.FC<{ user: UserProfile, onSelectAgent: (id: strin
             <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-2xl mb-4">
               <Rocket className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum agente criado ainda</h3>
-            <p className="text-slate-400 text-sm">Crie seus agentes personalizados no painel de administração.</p>
+            <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum agente encontrado</h3>
+            <p className="text-slate-400 text-sm">Tente outro termo para encontrar o agente ou elevador desejado.</p>
           </div>
         )}
 
@@ -307,11 +323,20 @@ export const HistoryView: React.FC<{
 // --- FINANCIAL VIEW (User Perspective) ---
 export const FinancialView: React.FC<{ user: UserProfile }> = ({ user }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const usagePercentage = typeof user.creditsLimit === 'number' && user.creditsLimit > 0
+    ? (user.creditsUsed / user.creditsLimit) * 100
+    : 0;
+  const remainingCredits = typeof user.creditsLimit === 'number'
+    ? Math.max(user.creditsLimit - user.creditsUsed, 0)
+    : null;
 
   const planPriceNum = Storage.getPlanPrice(user.plan);
   const planPrice = planPriceNum > 0
     ? `R$ ${planPriceNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : 'Grátis';
+  const nextBillingDateLabel = user.nextBillingDate
+    ? new Date(`${user.nextBillingDate}T12:00:00`).toLocaleDateString('pt-BR')
+    : '—';
 
   // Mock payment history
   const paymentHistory = [
@@ -358,7 +383,7 @@ export const FinancialView: React.FC<{ user: UserProfile }> = ({ user }) => {
             </div>
              <p className="text-sm text-slate-500 flex items-center">
                 <Clock size={16} className="mr-2 text-slate-400" />
-                Próxima cobrança: 10/03/2026
+                Próxima cobrança: {nextBillingDateLabel}
             </p>
             <button className="mt-4 w-full py-2.5 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 text-slate-600 transition-colors">
                 Alterar Plano
@@ -366,6 +391,36 @@ export const FinancialView: React.FC<{ user: UserProfile }> = ({ user }) => {
           </div>
         </div>
 
+        <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">Créditos de Consulta</h3>
+              <p className="text-slate-500 text-xs sm:text-sm">Acompanhe seu uso mensal da IA no plano atual.</p>
+            </div>
+            <div className="text-left sm:text-right">
+              <span className="text-2xl sm:text-4xl font-bold text-blue-600">{user.creditsUsed}</span>
+              <span className="text-slate-400 text-lg"> / {user.creditsLimit === 'Infinity' ? '∞' : user.creditsLimit}</span>
+            </div>
+          </div>
+
+          <div className="w-full bg-slate-100 rounded-full h-6 overflow-hidden mb-2 relative">
+            <div
+              className={`h-6 rounded-full transition-all duration-1000 ${
+                user.creditsLimit !== 'Infinity' && usagePercentage > 90 ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400'
+              }`}
+              style={{ width: `${user.creditsLimit === 'Infinity' ? 100 : Math.min(usagePercentage, 100)}%` }}
+            ></div>
+            <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-600 drop-shadow-md">
+              {user.creditsLimit !== 'Infinity' ? `${Math.round(usagePercentage)}% Usado` : 'Uso Ilimitado'}
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400 text-right mt-2">
+            {user.creditsLimit !== 'Infinity'
+              ? `${remainingCredits} créditos restantes.`
+              : 'Você tem acesso livre.'}
+          </p>
+        </div>
         {/* Payment History Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 sm:mb-8 overflow-hidden">
           <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -486,75 +541,6 @@ export const FinancialView: React.FC<{ user: UserProfile }> = ({ user }) => {
     </div>
   );
 };
-
-// --- USAGE VIEW (User Perspective) ---
-export const UsageView: React.FC<{ user: UserProfile }> = ({ user }) => {
-    const usagePercentage = typeof user.creditsLimit === 'number' 
-    ? (user.creditsUsed / user.creditsLimit) * 100 
-    : 15;
-
-    return (
-        <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-12 bg-slate-50">
-             <div className="max-w-4xl mx-auto">
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-6 sm:mb-8 flex items-center gap-2">
-                    <Activity className="text-slate-900"/> Meu Consumo
-                </h1>
-                 <div className="bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm mb-6 sm:mb-8">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-                        <div>
-                            <h3 className="text-base sm:text-lg font-bold text-slate-900">Créditos de Consulta</h3>
-                            <p className="text-slate-500 text-xs sm:text-sm">Quantas vezes você usou a IA este mês.</p>
-                        </div>
-                        <div className="text-left sm:text-right">
-                             <span className="text-2xl sm:text-4xl font-bold text-blue-600">{user.creditsUsed}</span>
-                             <span className="text-slate-400 text-lg"> / {user.creditsLimit === 'Infinity' ? '∞' : user.creditsLimit}</span>
-                        </div>
-                    </div>
-                    
-                    {/* Visual Progress Bar */}
-                    <div className="w-full bg-slate-100 rounded-full h-6 overflow-hidden mb-2 relative">
-                        <div 
-                            className={`h-6 rounded-full transition-all duration-1000 ${
-                                usagePercentage > 90 ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400'
-                            }`} 
-                            style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                        ></div>
-                        <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-600 drop-shadow-md">
-                            {user.creditsLimit !== 'Infinity' ? `${Math.round(usagePercentage)}% Usado` : 'Uso Ilimitado'}
-                        </div>
-                    </div>
-                    <p className="text-xs text-slate-400 text-right mt-2">
-                        {user.creditsLimit !== 'Infinity' 
-                         ? `${(user.creditsLimit as number) - user.creditsUsed} créditos restantes.`
-                         : 'Você tem acesso livre.'
-                        }
-                    </p>
-                 </div>
-
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                         <h3 className="font-bold text-slate-800 mb-4 flex items-center"><Zap size={18} className="mr-2 text-amber-500"/> Detalhes Técnicos</h3>
-                         <div className="space-y-3">
-                             <div className="flex justify-between text-sm">
-                                 <span className="text-slate-500">Tokens de entrada:</span>
-                                 <span className="font-mono">{user.tokenUsage.currentMonth.toLocaleString()}</span>
-                             </div>
-                             <div className="flex justify-between text-sm">
-                                 <span className="text-slate-500">Chats ativos:</span>
-                                 <span className="font-mono">12</span>
-                             </div>
-                         </div>
-                     </div>
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                         <h3 className="font-bold text-slate-800 mb-4 flex items-center"><TrendingUp size={18} className="mr-2 text-green-500"/> Sua Economia</h3>
-                         <div className="text-3xl font-bold text-slate-700 mb-1">R$ 450,00</div>
-                         <p className="text-xs text-slate-400">Estimativa baseada no custo médio de visitas técnicas evitadas.</p>
-                     </div>
-                 </div>
-             </div>
-        </div>
-    );
-}
 
 // --- PROFILE VIEW ---
 export const ProfileView: React.FC<{ user: UserProfile }> = ({ user }) => {
@@ -1182,9 +1168,9 @@ export const AdminPlans: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
           {plans.map(plan => (
-            <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+            <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 h-fit">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                 <Settings2 size={16} className="text-blue-600" />
@@ -1201,7 +1187,7 @@ export const AdminPlans: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Preço (R$)</label>
                   <input type="number" min="0" step="0.01" value={plan.price} onChange={e => handleField(plan.id, 'price', Number(e.target.value || 0))} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />

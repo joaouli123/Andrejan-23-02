@@ -20,10 +20,14 @@ type ViewState = 'landing' | 'login' | 'register' | 'app' | 'checkout' | 'confir
 const SLUG_MAP: Record<string, ViewState> = {
   '/': 'landing',
   '/entrar': 'login',
+  '/login': 'login',
   '/cadastro': 'register',
+  '/register': 'register',
   '/checkout': 'checkout',
   '/dashboard': 'app',
+  '/app': 'app',
   '/confirmacao': 'confirmation',
+  '/confirmacao-pagamento': 'confirmation',
 };
 
 const VIEW_TO_SLUG: Record<ViewState, string> = {

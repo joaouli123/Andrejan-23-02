@@ -71,57 +71,63 @@ const Pricing: React.FC<PricingProps> = ({ onSelectPlan }) => {
   }, []);
 
   return (
-    <div id='pricing' className='py-24 bg-white relative'>
-      <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
-        <div className='text-center mb-16'>
-          <h2 className='text-3xl font-extrabold text-slate-900'>Planos e Preços</h2>
-          <p className='mt-4 text-xl text-slate-500'>Escolha o plano ideal para suas necessidades</p>
+    <div id='pricing' className='py-24 bg-slate-50 relative overflow-hidden'>
+      {/* Background Elements */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-b from-blue-100/50 to-transparent rounded-full blur-3xl"></div>
+      </div>
+
+      <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10'>
+        <div className='text-center max-w-3xl mx-auto mb-20'>
+          <h2 className='text-base font-semibold text-blue-600 tracking-wide uppercase mb-3'>Investimento</h2>
+          <p className='text-3xl font-extrabold text-slate-900 sm:text-4xl lg:text-5xl tracking-tight mb-6'>
+            Planos Simples e Transparentes
+          </p>
+          <p className='text-lg sm:text-xl text-slate-600'>
+            Escolha o plano ideal para suas necessidades. Sem taxas ocultas, cancele quando quiser.
+          </p>
         </div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8'>
+        <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 max-w-7xl mx-auto'>
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative flex flex-col p-8 rounded-2xl border-2 transition-all ${plan.popular ? 'border-blue-600 shadow-xl shadow-blue-50 bg-white scale-[1.03]' : 'border-slate-200 bg-white hover:shadow-lg'}`}
+              className={`relative flex flex-col p-8 rounded-3xl transition-all duration-300 ${plan.popular ? 'border-2 border-blue-600 shadow-2xl shadow-blue-500/20 bg-white md:-translate-y-4 z-10' : 'border border-slate-200 bg-white shadow-lg shadow-slate-200/50 hover:shadow-xl hover:-translate-y-1'}`}
             >
               {plan.popular && (
-                <div className='absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wide'>
+                <div className='absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-6 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-md'>
                   Mais Popular
                 </div>
               )}
 
-              <div className='mb-6'>
-                <h3 className='text-lg font-semibold text-slate-900'>{plan.name}</h3>
-                <div className='mt-4 flex items-baseline'>
-                  <span className='text-4xl font-extrabold text-slate-900'>
-                    {plan.price === 0 ? 'R$ 0' : `R$ ${plan.price.toFixed(2)}`}
+              <div className='mb-8'>
+                <h3 className='text-xl font-bold text-slate-900 mb-2'>{plan.name}</h3>
+                <div className='mt-4 flex items-baseline text-slate-900'>
+                  <span className='text-5xl font-extrabold tracking-tight'>
+                    {plan.price === 0 ? 'Grátis' : `R$ ${plan.price.toFixed(2).replace('.', ',')}`}
                   </span>
-                  <span className='ml-1 text-xl font-medium text-slate-500'>/{plan.period}</span>
+                  {plan.price > 0 && <span className='ml-2 text-lg font-medium text-slate-500'>/{plan.period}</span>}
                 </div>
               </div>
 
               <ul className='flex-1 space-y-4 mb-8'>
                 {plan.features.map((feature, idx) => (
                   <li key={idx} className='flex items-start'>
-                    <Check className={`flex-shrink-0 h-5 w-5 ${plan.popular ? 'text-blue-600' : 'text-green-500'}`} />
-                    <span className='ml-3 text-slate-600 text-sm'>{feature}</span>
+                    <div className={`flex-shrink-0 mt-0.5 p-1 rounded-full ${plan.popular ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                      <Check className='h-3 w-3' />
+                    </div>
+                    <span className='ml-3 text-slate-600 text-sm leading-relaxed'>{feature}</span>
                   </li>
                 ))}
               </ul>
 
               <button
                 onClick={() => onSelectPlan(plan)}
-                className={`w-full py-3 px-4 rounded-full font-bold transition-all ${plan.popular ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}
+                className={`w-full py-3.5 px-4 rounded-xl font-bold transition-all transform hover:-translate-y-0.5 ${plan.popular ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/30' : 'bg-slate-100 text-slate-800 hover:bg-slate-200 hover:shadow-md'}`}
               >
                 {plan.id === 'free'
                   ? 'Começar Grátis'
-                  : plan.id === 'iniciante'
-                    ? 'Assinar Iniciante'
-                    : plan.id === 'profissional'
-                      ? 'Assinar Profissional'
-                      : plan.id === 'empresa'
-                        ? 'Assinar Empresa'
-                        : `Assinar ${plan.name}`}
+                  : `Assinar ${plan.name}`}
               </button>
             </div>
           ))}

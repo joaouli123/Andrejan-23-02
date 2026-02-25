@@ -10,7 +10,6 @@ import {
   Zap,
   Users,
   PieChart,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -25,8 +24,7 @@ import {
   ProfileView, 
   AdminOverview, 
   AdminUsers, 
-  AdminPlans,
-  UsageView 
+  AdminPlans
 } from './DashboardViews';
 import AdminDashboard from './admin/AdminDashboard';
 import AgentBuilder from './AgentBuilder';
@@ -35,7 +33,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type View = 'agents' | 'chat' | 'financial' | 'usage' | 'profile' | 'admin' | 'admin_brands_models' | 'admin_users' | 'admin_plans' | 'agent_builder';
+type View = 'agents' | 'chat' | 'financial' | 'profile' | 'admin' | 'admin_brands_models' | 'admin_users' | 'admin_plans' | 'agent_builder';
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<View>('agents');
@@ -189,7 +187,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
           <SidebarSection title="Minha Conta" />
           <SidebarItem view="financial" icon={CreditCard} label="Minha Assinatura" />
-          <SidebarItem view="usage" icon={BarChart3} label="Meu Consumo" />
           <SidebarItem view="profile" icon={User} label="Meu Perfil" />
 
           {/* Admin Expanded Links */}
@@ -267,7 +264,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           )}
 
           {currentView === 'financial' && <FinancialView user={user} />}
-          {currentView === 'usage' && <UsageView user={user} />}
           {currentView === 'profile' && <ProfileView user={user} />}
 
           {/* Admin Views */}
