@@ -11,6 +11,69 @@ import {
 } from 'lucide-react';
 import * as Storage from '../services/storage';
 
+const WaveChart = ({ data, color, height = 120, formatValue }: { data: { label: string, value: number }[], color: string, height?: number, formatValue?: (v: number) => string }) => {
+  if (!data || data.length === 0) return <div className="h-20 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>;
+  
+  const max = Math.max(...data.map(d => d.value)) || 1;
+  const min = 0;
+  
+  const pathData = `M 0,100 L 0,${100 - ((data[0].value - min) / (max - min)) * 100} ` + 
+    data.map((d, i) => {
+      if (i === 0) return '';
+      const prevX = ((i - 1) / (data.length - 1 || 1)) * 100;
+      const prevY = 100 - ((data[i - 1].value - min) / (max - min)) * 100;
+      const currX = (i / (data.length - 1 || 1)) * 100;
+      const currY = 100 - ((d.value - min) / (max - min)) * 100;
+      const cp1X = prevX + (currX - prevX) / 2;
+      const cp2X = prevX + (currX - prevX) / 2;
+      return `C ${cp1X},${prevY} ${cp2X},${currY} ${currX},${currY}`;
+    }).join(' ') + ` L 100,100 Z`;
+
+  const linePath = `M 0,${100 - ((data[0].value - min) / (max - min)) * 100} ` + 
+    data.map((d, i) => {
+      if (i === 0) return '';
+      const prevX = ((i - 1) / (data.length - 1 || 1)) * 100;
+      const prevY = 100 - ((data[i - 1].value - min) / (max - min)) * 100;
+      const currX = (i / (data.length - 1 || 1)) * 100;
+      const currY = 100 - ((d.value - min) / (max - min)) * 100;
+      const cp1X = prevX + (currX - prevX) / 2;
+      const cp2X = prevX + (currX - prevX) / 2;
+      return `C ${cp1X},${prevY} ${cp2X},${currY} ${currX},${currY}`;
+    }).join(' ');
+
+  return (
+    <div className="w-full flex flex-col" style={{ height: height + 40 }}>
+      <div className="relative w-full flex-1" style={{ height }}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+          <defs>
+            <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+          <path d={pathData} fill={`url(#grad-${color.replace('#', '')})`} />
+          <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {data.map((d, i) => {
+            const x = (i / (data.length - 1 || 1)) * 100;
+            const y = 100 - ((d.value - min) / (max - min)) * 100;
+            return (
+              <circle key={i} cx={x} cy={y} r="2" fill="white" stroke={color} strokeWidth="1" className="transition-all hover:r-3 cursor-pointer" />
+            );
+          })}
+        </svg>
+      </div>
+      <div className="flex justify-between mt-3 px-1">
+        {data.map((d, i) => (
+          <div key={i} className="flex flex-col items-center text-center" style={{ width: `${100 / data.length}%` }}>
+            <span className="text-[10px] text-slate-400 mb-1">{d.label}</span>
+            <span className="text-xs font-bold text-slate-700">{formatValue ? formatValue(d.value) : d.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // --- AGENT CARD COMPONENT ---
 interface AgentCardProps {
     agent: Agent;
@@ -1054,16 +1117,8 @@ export const AdminOverview: React.FC = () => {
                         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                           <LineChart size={18} className="text-blue-600" /> Evolução de Vendas no Período
                         </h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                          {metrics.salesSeries.map(point => (
-                            <div key={`sales-${point.label}`} className="bg-slate-50 rounded-lg p-3">
-                              <div className="h-20 flex items-end">
-                                <div className="w-full bg-blue-500/80 rounded-t" style={{ height: `${(point.value / maxSales) * 100}%`, minHeight: '6px' }}></div>
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-2">{point.label}</p>
-                              <p className="text-xs font-bold text-slate-800">{formatCurrency(point.value)}</p>
-                            </div>
-                          ))}
+                        <div className="pt-4">
+                          <WaveChart data={metrics.salesSeries} color="#3b82f6" height={100} formatValue={formatCurrency} />
                         </div>
                     </div>
                 </div>
@@ -1087,16 +1142,8 @@ export const AdminOverview: React.FC = () => {
                       <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <Users size={18} className="text-blue-600" /> Novos Usuários por Período
                       </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                        {metrics.usersSeries.map(point => (
-                          <div key={`users-${point.label}`} className="bg-slate-50 rounded-lg p-3">
-                            <div className="h-20 flex items-end">
-                              <div className="w-full bg-emerald-500/80 rounded-t" style={{ height: `${(point.value / maxUsers) * 100}%`, minHeight: '6px' }}></div>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-2">{point.label}</p>
-                            <p className="text-xs font-bold text-slate-800">{point.value.toLocaleString('pt-BR')} usuários</p>
-                          </div>
-                        ))}
+                      <div className="pt-4">
+                        <WaveChart data={metrics.usersSeries} color="#10b981" height={100} formatValue={(v) => `${v} usuários`} />
                       </div>
                     </div>
             </div>

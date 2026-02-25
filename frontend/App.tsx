@@ -41,6 +41,7 @@ const VIEW_TO_SLUG: Record<ViewState, string> = {
 
 function viewFromPath(pathname: string): ViewState | null {
   const clean = pathname.replace(/\/+$/, '') || '/';
+  if (clean.startsWith('/dashboard')) return 'app';
   return SLUG_MAP[clean] ?? null;
 }
 
@@ -163,6 +164,18 @@ const App: React.FC = () => {
     navigateTo('landing');
   };
 
+  const fallbackPlan = getAvailablePlans().find(plan => plan.id === 'free') || getAvailablePlans()[0] || null;
+  const registerPlan = selectedPlan || fallbackPlan;
+
+  useEffect(() => {
+    if (view === 'register' && !registerPlan) {
+      navigateTo('landing', true);
+    }
+    if (view === 'checkout' && !selectedPlan) {
+      navigateTo('landing', true);
+    }
+  }, [view, registerPlan, selectedPlan, navigateTo]);
+
   const handleSelectPlan = (plan: Plan) => {
     setSelectedPlan(plan);
     navigateTo('register');
@@ -170,21 +183,29 @@ const App: React.FC = () => {
 
   const handleRegisterSuccess = (data: any) => {
     setRegistrationData(data);
-    if (selectedPlan) {
-      const isFreePlan = selectedPlan.id === 'free' || selectedPlan.price === 0;
-      Storage.signup({
-        name: data.name,
-        email: data.email,
-        password: data.password,
-        plan: selectedPlan.name,
-        status: isFreePlan ? 'active' : 'pending_payment'
-      });
+    const chosenPlan = selectedPlan || fallbackPlan;
+    if (!chosenPlan) {
+      navigateTo('landing');
+      return;
+    }
 
-      if (isFreePlan) {
-        Storage.applyPlanToCurrentUser('Free');
-        navigateTo('app');
-        return;
-      }
+    const isFreePlan = chosenPlan.id === 'free' || chosenPlan.price === 0;
+    Storage.signup({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      plan: chosenPlan.name,
+      status: isFreePlan ? 'active' : 'pending_payment'
+    });
+
+    if (!selectedPlan) {
+      setSelectedPlan(chosenPlan);
+    }
+
+    if (isFreePlan) {
+      Storage.applyPlanToCurrentUser(chosenPlan.name as any);
+      navigateTo('app');
+      return;
     }
     navigateTo('checkout');
   };
@@ -229,9 +250,9 @@ const App: React.FC = () => {
         <Auth onLoginSuccess={navigateToApp} onBack={() => navigateTo('landing')} />
       )}
 
-      {view === 'register' && selectedPlan && (
+      {view === 'register' && registerPlan && (
         <Register 
-            plan={selectedPlan} 
+        plan={registerPlan} 
             onSuccess={handleRegisterSuccess} 
             onBack={() => navigateTo('landing')} 
         />

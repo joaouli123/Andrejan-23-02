@@ -35,8 +35,35 @@ interface DashboardProps {
 
 type View = 'agents' | 'chat' | 'financial' | 'profile' | 'admin' | 'admin_brands_models' | 'admin_users' | 'admin_plans' | 'agent_builder';
 
+const VIEW_SLUGS: Record<View, string> = {
+  agents: '/dashboard',
+  chat: '/dashboard/chat',
+  financial: '/dashboard/assinatura',
+  profile: '/dashboard/perfil',
+  admin: '/dashboard/admin',
+  admin_brands_models: '/dashboard/admin/marcas',
+  admin_users: '/dashboard/admin/usuarios',
+  admin_plans: '/dashboard/admin/planos',
+  agent_builder: '/dashboard/admin/agentes'
+};
+
+const SLUG_TO_VIEW: Record<string, View> = {
+  '/dashboard': 'agents',
+  '/dashboard/chat': 'chat',
+  '/dashboard/assinatura': 'financial',
+  '/dashboard/perfil': 'profile',
+  '/dashboard/admin': 'admin',
+  '/dashboard/admin/marcas': 'admin_brands_models',
+  '/dashboard/admin/usuarios': 'admin_users',
+  '/dashboard/admin/planos': 'admin_plans',
+  '/dashboard/admin/agentes': 'agent_builder'
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
-  const [currentView, setCurrentView] = useState<View>('agents');
+  const [currentView, setCurrentView] = useState<View>(() => {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/dashboard';
+    return SLUG_TO_VIEW[path] || 'agents';
+  });
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false); 
@@ -80,6 +107,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         setActiveSessionId(newSession.id);
         setCurrentView('chat');
         setIsSidebarOpen(false);
+        window.history.pushState({ view: 'chat' }, '', VIEW_SLUGS['chat']);
     } catch (e) {
         console.error("Error creating session", e);
         onLogout();
@@ -90,6 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setActiveSessionId(sessionId);
     setCurrentView('chat');
     setIsSidebarOpen(false);
+    window.history.pushState({ view: 'chat' }, '', VIEW_SLUGS['chat']);
   };
 
   const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
@@ -99,13 +128,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     if (activeSessionId === sessionId) {
       setCurrentView('agents');
       setActiveSessionId(null);
+      window.history.pushState({ view: 'agents' }, '', VIEW_SLUGS['agents']);
     }
   };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/dashboard';
+      const view = SLUG_TO_VIEW[path];
+      if (view) {
+        setCurrentView(view);
+        if (view !== 'chat') setActiveSessionId(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleNav = (view: View) => {
     setCurrentView(view);
     if (view !== 'chat') setActiveSessionId(null);
     setIsSidebarOpen(false);
+    const slug = VIEW_SLUGS[view];
+    if (slug && window.location.pathname !== slug) {
+      window.history.pushState({ view }, '', slug);
+    }
   };
 
   const SidebarItem = ({ view, icon: Icon, label, onClick, isAction = false }: { view?: View, icon: any, label: string, onClick?: () => void, isAction?: boolean }) => {
