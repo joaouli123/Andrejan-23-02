@@ -138,9 +138,12 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
       const t = String(text || '').trim();
       if (!t) return false;
       return [
-        /\b[a-z]{1,5}\s?-?\s?\d{2,5}[a-z]?\b/i,
+        /\b[a-z]{1,5}\s?-?\s?\d{1,5}[a-z]?\b/i,
         /\b(gen\s?\d|g\d)\b/i,
-        /\b(lcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b/i,
+        /\b(lcb[i12]|rcb\d|tcbc|gscb|gecb|gdcb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b/i,
+        /\b[a-z]{3}\d{4,}[a-z]*\b/i,
+        /\b(otismatic|miconic|mag|mrl|mrds|ledo)\b/i,
+        /\b(do\s?2000|xo\s?508)\b/i,
       ].some(pattern => pattern.test(t));
     };
 

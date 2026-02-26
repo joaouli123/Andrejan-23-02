@@ -10,6 +10,7 @@ from models import ChatSession, ChatMessage, Brand
 from ingestion.embedder import search_brand, _extract_search_keywords
 from ingestion.gemini_vision import rerank_chunks
 from agent.clarifier import (
+    MAX_CLARIFICATION_ROUNDS,
     needs_clarification,
     should_require_model_clarification,
     get_clarification_question,
@@ -17,6 +18,12 @@ from agent.clarifier import (
     analyze_search_confidence,
     generate_smart_clarification,
     build_enriched_query_from_history,
+    count_clarification_rounds,
+    extract_known_context,
+    determine_missing_info,
+    generate_progressive_question,
+    generate_disambiguation_question,
+    get_alternative_docs_for_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -187,21 +194,22 @@ async def chat(
     external_history: list[dict] | None = None,
 ) -> dict:
     """
-    Main chat function — search-first approach:
+    Main chat function — progressive intelligence approach:
     1. Get/create session + history
-    2. Quick check if query is too short → ask clarification
-    3. Enrich query with history context (model info from previous turns)
-    4. Search Qdrant
-    5. Analyze search confidence
-    6. If ambiguous results across many docs → smart clarification
-    7. Rerank + generate answer
+    2. Greeting check
+    3. Extract accumulated context (model/board/drive/symptom from all turns)
+    4. Count how many clarification rounds we've already done
+    5. Progressive questioning: ask targeted questions until we have enough info
+    6. Search Qdrant with enriched query
+    7. Confidence analysis + document disambiguation
+    8. Answer with alternatives or ask another progressive question
+    9. After MAX rounds, ALWAYS answer with best available info
     """
     # Session management
     session = await get_or_create_session(db, user_id, brand_id, session_id)
     history = await get_session_history(db, session.session_id)
 
-    # If no internal history, use external history from the frontend.
-    # This allows multi-turn context (model from previous turns, etc.).
+    # If no internal history, use external history from the frontend
     if not history and external_history:
         history = external_history
 
@@ -214,82 +222,56 @@ async def chat(
     db.add(user_msg)
     await db.commit()
 
+    # ── Phase 1: Greeting check ─────────────────────────────────────────
     if _is_greeting_only(query):
         greeting_answer = (
             f"Olá! 👋 Bom te ver por aqui. Sou seu assistente técnico da **{brand_name}**.\n\n"
             "Pode me descrever a falha com **modelo/geração**, **placa/controlador** e **código de erro** (se houver) que eu te respondo direto e objetivo."
         )
-        asst_msg = ChatMessage(
-            session_id=session.id,
-            role="assistant",
-            content=greeting_answer,
-            sources=json.dumps([]),
-        )
-        db.add(asst_msg)
-        await db.commit()
-        return {
-            "session_id": session.session_id,
-            "answer": greeting_answer,
-            "sources": [],
-            "needs_clarification": False,
-        }
+        return await _save_and_return(db, session, greeting_answer, [], False)
 
-    # --- Step 0: Mandatory model/board/code clarification gate ---
-    # If technical question lacks identifying info, always ask first.
-    if should_require_model_clarification(query, history):
-        if len(history) == 0:
-            clarification = (
-                f"Olá! Eu sou seu assistente técnico da **{brand_name}**.\n\n"
-                "Para te responder com precisão (inclusive em modelos antigos e novos), preciso destes dados:\n"
-                "1. **Modelo/geração** do elevador (como na etiqueta)\n"
-                "2. **Placa/controlador**\n"
-                "3. **Código de erro** e sintoma observado\n\n"
-                "Exemplo: **OVF10 Gen2, placa C.07.10, erro E015, porta abre e fecha e não parte**."
-            )
-        else:
-            clarification = (
-                "Para te responder com precisão, me informe primeiro o **modelo/geração do elevador** "
-                "(como aparece na etiqueta) e, se tiver, a **placa/controlador** "
-                "e o **código de falha** exibido."
-            )
-        asst_msg = ChatMessage(
-            session_id=session.id,
-            role="assistant",
-            content=clarification,
-            sources=json.dumps([]),
-        )
-        db.add(asst_msg)
-        await db.commit()
-        return {
-            "session_id": session.session_id,
-            "answer": clarification,
-            "sources": [],
-            "needs_clarification": True,
-        }
+    # ── Phase 2: Extract accumulated context from entire conversation ───
+    known_context = extract_known_context(query, history)
+    clarification_rounds = count_clarification_rounds(history)
+    can_still_ask = clarification_rounds < MAX_CLARIFICATION_ROUNDS
 
-    # --- Step 1: Quick heuristic check (very short queries) ---
-    if needs_clarification(query, history):
+    logger.info(
+        f"Context: model={known_context.get('model')}, board={known_context.get('board')}, "
+        f"drive={known_context.get('drive')}, symptom={known_context.get('symptom')}, "
+        f"error={known_context.get('error_code')}, rounds={clarification_rounds}/{MAX_CLARIFICATION_ROUNDS}"
+    )
+
+    # ── Phase 3: Pre-search clarification (only on first message) ───────
+    # If technical question with NO model info at all and NO history context,
+    # ask for model first (but only if we haven't asked yet)
+    if can_still_ask and clarification_rounds == 0:
+        if should_require_model_clarification(query, history):
+            missing = determine_missing_info(known_context)
+            if missing:
+                if len(history) == 0:
+                    clarification = (
+                        f"Olá! Eu sou seu assistente técnico da **{brand_name}**.\n\n"
+                        "Para te responder com precisão (inclusive em modelos antigos e novos), preciso destes dados:\n"
+                        "1. **Modelo/geração** do elevador (como na etiqueta)\n"
+                        "2. **Placa/controlador**\n"
+                        "3. **Código de erro** e sintoma observado\n\n"
+                        "Exemplo: **OVF10 Gen2, placa LCB2, erro UV1, porta abre e fecha e não parte**."
+                    )
+                else:
+                    clarification = (
+                        "Para te responder com precisão, me informe primeiro o **modelo/geração do elevador** "
+                        "(como aparece na etiqueta) e, se tiver, a **placa/controlador** "
+                        "e o **código de falha** exibido."
+                    )
+                return await _save_and_return(db, session, clarification, [], True)
+
+    # ── Phase 3.5: Quick heuristic check (very short first queries) ─────
+    if can_still_ask and clarification_rounds == 0 and needs_clarification(query, history):
         clarification = await get_clarification_question(query, brand_name)
         if clarification:
-            asst_msg = ChatMessage(
-                session_id=session.id,
-                role="assistant",
-                content=clarification,
-                sources=json.dumps([]),
-            )
-            db.add(asst_msg)
-            await db.commit()
-            return {
-                "session_id": session.session_id,
-                "answer": clarification,
-                "sources": [],
-                "needs_clarification": True,
-            }
+            return await _save_and_return(db, session, clarification, [], True)
 
-    # --- Step 2: Build enriched query from conversation history ---
-    # This combines model/board info from previous turns with current question
-    # Critical: when user answers a clarification (e.g. "OVF10"), we need
-    # to combine that with the original question from history.
+    # ── Phase 4: Build enriched query from conversation history ─────────
     if history and len(history) >= 2:
         enriched_query = await build_enriched_query_from_history(
             query, brand_name, history
@@ -298,17 +280,13 @@ async def chat(
         enriched_query = query
 
     enriched_query = _expand_brand_query_terms(enriched_query, brand_name)
-
     logger.info(f"Query: '{query}' | Enriched: '{enriched_query}'")
 
-    # --- Step 3: Search Qdrant (multi-strategy) ---
+    # ── Phase 5: Search Qdrant (multi-strategy) ─────────────────────────
     chunks = search_brand(brand_slug, enriched_query, top_k=20)
     chunks = _prioritize_symptom_chunks(chunks, enriched_query, brand_name)
 
-    # --- Step 3.5: Fallback search strategies ---
-    # If the main search didn't find confident results and the query has
-    # specific terms (model codes, etc.), try searching with just those terms.
-    # This handles cases where the enriched query is too broad.
+    # Fallback search strategies
     confidence = analyze_search_confidence(chunks, enriched_query)
 
     if not confidence["confident"] or confidence["top_score"] < 0.70:
@@ -324,12 +302,9 @@ async def chat(
                         chunks.append(ec)
                         existing_keys.add(key)
 
-            # Re-sort all chunks by score
             chunks.sort(key=lambda x: x["score"], reverse=True)
             chunks = _prioritize_symptom_chunks(chunks, enriched_query, brand_name)
-            # Keep top results
             chunks = chunks[:25]
-            # Re-analyze confidence with expanded results
             confidence = analyze_search_confidence(chunks, enriched_query)
             logger.info(f"After fallback: confidence={confidence['reason']}, top={confidence['top_score']:.3f}")
 
@@ -357,69 +332,89 @@ async def chat(
         f"spread={confidence['score_spread']:.3f})"
     )
 
-    # --- Guardrail: never lock into a specific model if user did not provide one ---
-    if not _has_explicit_model_identifier(enriched_query):
-        unique_docs = confidence.get("unique_docs", [])
-        top_score = float(confidence.get("top_score", 0.0) or 0.0)
-        if len(unique_docs) >= 2 or top_score < 0.90:
-            model_guard = (
-                "Antes de eu fechar o diagnóstico, me confirme o **modelo/geração** e a **placa/controlador** "
-                "(ex.: LCB1, LCB2, TCBC, GSCB). Sem isso eu posso cruzar versões diferentes e te passar um procedimento errado."
-            )
-            asst_msg = ChatMessage(
-                session_id=session.id,
-                role="assistant",
-                content=model_guard,
-                sources=json.dumps([]),
-            )
-            db.add(asst_msg)
-            await db.commit()
-            return {
-                "session_id": session.session_id,
-                "answer": model_guard,
-                "sources": [],
-                "needs_clarification": True,
-            }
+    # ── Phase 6: Progressive intelligence decision engine ───────────────
+    # Decide: answer now, ask another targeted question, or disambiguate
 
-    # --- Step 5: Smart clarification if results are ambiguous ---
-    # Only ask clarification if we haven't asked recently (avoid loops)
-    asked_recently = False
-    if history:
-        recent_asst = [m for m in history[-4:] if m["role"] == "assistant"]
-        asked_recently = any("?" in m["content"] for m in recent_asst)
+    if can_still_ask:
+        # 6a. If no model identified in entire conversation AND results span
+        #     multiple docs → ask which model/equipment
+        if not known_context.get("model") and not _has_explicit_model_identifier(enriched_query):
+            unique_docs = confidence.get("unique_docs", [])
+            if len(unique_docs) >= 2:
+                # Try disambiguation first
+                disambig = await generate_disambiguation_question(
+                    enriched_query, brand_name, chunks
+                )
+                if disambig:
+                    logger.info(f"Disambiguation question: '{disambig}'")
+                    return await _save_and_return(db, session, disambig, [], True)
 
-    if not confidence["confident"] and not asked_recently:
-        smart_question = await generate_smart_clarification(
-            enriched_query, brand_name, chunks, confidence, history
+                # Fallback: generic model question
+                model_guard = (
+                    "Antes de eu fechar o diagnóstico, me confirme o **modelo/geração** e a **placa/controlador** "
+                    "(ex.: Gen2 com GECB, ADV-210 com LCB1, MRL, OVF10). "
+                    "Sem isso eu posso cruzar versões diferentes e te passar um procedimento errado."
+                )
+                return await _save_and_return(db, session, model_guard, [], True)
+
+        # 6b. If we have model but results are NOT confident,
+        #     ask for more specific info (board, error, symptom)
+        if not confidence["confident"]:
+            missing = determine_missing_info(known_context)
+            if missing:
+                progressive_q = await generate_progressive_question(
+                    enriched_query, brand_name, known_context,
+                    clarification_rounds + 1, chunks, history,
+                )
+                if progressive_q:
+                    logger.info(f"Progressive question (round {clarification_rounds + 1}): '{progressive_q}'")
+                    return await _save_and_return(db, session, progressive_q, [], True)
+
+        # 6c. If confident but results come from multiple docs with similar scores,
+        #     ask which variant the user has
+        if confidence["confident"] and len(confidence.get("unique_docs", [])) >= 3:
+            score_spread = confidence.get("score_spread", 0)
+            if score_spread < 0.05:
+                # Very similar scores across many docs — worth asking
+                disambig = await generate_disambiguation_question(
+                    enriched_query, brand_name, chunks
+                )
+                if disambig:
+                    return await _save_and_return(db, session, disambig, [], True)
+
+    # ── Phase 7: We're answering now ────────────────────────────────────
+    # Either we have enough confidence, or we've exhausted our question budget
+
+    if not can_still_ask and not confidence["confident"]:
+        logger.info(
+            f"Reached max clarification rounds ({MAX_CLARIFICATION_ROUNDS}), "
+            f"answering with best available (confidence: {confidence['reason']})"
         )
-        if smart_question:
-            asst_msg = ChatMessage(
-                session_id=session.id,
-                role="assistant",
-                content=smart_question,
-                sources=json.dumps([]),
-            )
-            db.add(asst_msg)
-            await db.commit()
-            return {
-                "session_id": session.session_id,
-                "answer": smart_question,
-                "sources": [],
-                "needs_clarification": True,
-            }
 
-    # --- Step 6: Rerank with Gemini ---
-    # Use enriched_query so reranking considers full context
-    # (e.g. user answered "OVF10" to clarification about their original question)
+    # Rerank with Gemini
     if chunks:
         chunks = await rerank_chunks(enriched_query, chunks)
         chunks = chunks[:7]  # top 7 after rerank
 
-    # --- Step 7: Generate answer ---
-    # Pass enriched_query so the answer covers the full conversation context
-    answer, sources = await generate_answer(enriched_query, brand_name, chunks, history)
+    # Find alternative docs that might be useful
+    alternative_docs = get_alternative_docs_for_context(known_context, chunks)
 
-    # Save assistant message
+    # Generate answer
+    answer, sources = await generate_answer(
+        enriched_query, brand_name, chunks, history, alternative_docs
+    )
+
+    return await _save_and_return(db, session, answer, sources, False)
+
+
+async def _save_and_return(
+    db: AsyncSession,
+    session: ChatSession,
+    answer: str,
+    sources: list[dict],
+    needs_clarification: bool,
+) -> dict:
+    """Save assistant message and return response dict."""
     asst_msg = ChatMessage(
         session_id=session.id,
         role="assistant",
@@ -428,10 +423,9 @@ async def chat(
     )
     db.add(asst_msg)
     await db.commit()
-
     return {
         "session_id": session.session_id,
         "answer": answer,
         "sources": sources,
-        "needs_clarification": False,
+        "needs_clarification": needs_clarification,
     }

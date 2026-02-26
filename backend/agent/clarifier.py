@@ -12,6 +12,11 @@ client = genai.Client(api_key=settings.gemini_api_key)
 CHAT_MODEL = "gemini-2.5-flash"
 
 # ---------------------------------------------------------------------------
+# Maximum clarification rounds before forcing an answer
+# ---------------------------------------------------------------------------
+MAX_CLARIFICATION_ROUNDS = 3
+
+# ---------------------------------------------------------------------------
 # Patterns
 # ---------------------------------------------------------------------------
 GENERIC_INDICATORS = [
@@ -30,7 +35,11 @@ MODEL_CODE_PATTERNS = [
     r"\b\d{3,5}[a-z]{0,3}\b",                 # 560, 210dp
     r"\bgen\s?\d\b",                         # gen2, gen 2
     r"\b[a-z]{3}\d{4,}[a-z]*\b",              # JAA30171AAA, BAA21000S (Otis part numbers)
-    r"\b(lcb[i12]|rcb\d|gscb|tcbc)\b",         # Otis boards: LCBI, LCB1, LCB2, RCB2
+    r"\b(lcb[i12]|rcb\d|gscb|tcbc|gecb|gdcb)\b",  # Otis boards
+    r"\b(otismatic|miconic|mag)\b",            # Otis model families
+    r"\b(mrl|do\s?2000|mrds|ledo)\b",          # Otis equipment types
+    r"\b(ovf\s?\d{1,2}|cvf|lvf|cfw\s?\d{2})\b",  # Otis drives
+    r"\b(advz[aã]o|adv)\b",                   # ADV family
 ]
 
 TECHNICAL_QUESTION_HINTS = [
@@ -40,7 +49,128 @@ TECHNICAL_QUESTION_HINTS = [
     r"\bporta\b", r"\btrinco\b", r"\bintertrav\b", r"\bdw\b", r"\bdfc\b", r"\bes\b",
     r"\bliga[cç][aã]o\b", r"\besquema\b", r"\bplaca\b", r"\bdrive\b", r"\binversor\b",
     r"\bcalibra[cç][aã]o\b", r"\bajuste\b", r"\bparametr", r"\bconfigura", r"\bmanual\b",
+    r"\bresgate\b", r"\bfreio\b", r"\bencoder\b", r"\bmotor\b", r"\bnivel", r"\bvibra",
 ]
+
+# ---------------------------------------------------------------------------
+# Known Otis equipment/model families → document mapping
+# This helps the agent know what documents exist for what equipment
+# ---------------------------------------------------------------------------
+OTIS_KNOWLEDGE_MAP = {
+    "gen2": {
+        "docs": ["Manual GEN2.pdf", "Gen2 Comfort - Manual de serviços-1.pdf",
+                  "Manual Otis Gen2 Confort-1.pdf", "MAG GEN2-1.pdf",
+                  "Treinamento do produto Gen2C.pdf", "Manual  GEN2 Resgate.pdf",
+                  "DIAGRAMA GEN2-1.pdf", "Diagrama Gen2 Confort Baa21000j-1.pdf",
+                  "GEN 2 esquema.pdf", "GEN 2 MCS 220C GAA21000CJ.pdf"],
+        "boards": ["GECB", "LCB2", "MCS220"],
+        "drives": ["OVF20", "LVA"],
+    },
+    "ovf10": {
+        "docs": ["Manual CVF - OVF10.pdf", "Calibração do OVF10.pdf",
+                  "ADV DP COM OVF10 BAA21340K.pdf", "OVF10 por WEG CFW09.pdf"],
+        "boards": ["LCB1", "LCBI", "LCB2"],
+        "related": ["ADV-210", "CVF"],
+    },
+    "ovf20": {
+        "docs": ["Manual LVF - OVF 20.pdf", "LFV OVF20 MNUAL DE AJUSTE.pdf",
+                  "LCB2 OVF20 VF2 BAA21290AX.pdf", "ADV 210 com OVF20 (BAA21340R).pdf"],
+        "boards": ["LCB2"],
+    },
+    "lcb1": {
+        "docs": ["DIAGRAMA DE LCB1 PARA LCB2.pdf", "DIAGRAMA TROCA DE LCB1 POR LCB2.pdf",
+                  "LCB1 POR LCB2 SUBSTITUICAO ATC 035.pdf",
+                  "Diagrama ADV 210 LCBI.pdf", "ADV210DP - LCBI.pdf"],
+        "upgrade": "LCB2",
+    },
+    "lcb2": {
+        "docs": ["LCB2 Resumo.pdf", "WEG LCB2.pdf", "Manual URM LCB2.pdf",
+                  "LCB2 OVF20 VF2 BAA21290AX.pdf"],
+        "drives": ["OVF20", "CFW09", "CFW11"],
+    },
+    "lcbii": {
+        "docs": ["LCBII NOVA-2.pdf", "Guia URM LCB II.pdf",
+                  "VW2 CFW09 com LCBll-1.pdf", "Man CFW09 com LCBII.pdf",
+                  "BAA21230AG_ADVDP LCBII.pdf"],
+        "drives": ["CFW09", "VW2"],
+    },
+    "rcb2": {
+        "docs": ["RCB2 Manual de Ajuste.pdf", "GUIA DE USO DA URM – RCB 2.PDF-3.pdf",
+                  "Lista de IO RCB2 JAA30171AAA.pdf"],
+    },
+    "gecb": {
+        "docs": ["Manual GECB gen2-1.pdf", "GECB+reference+2007.pdf",
+                  "MANUAL GECB Guia de uso da URM (GAA30780CAA_Fsd1).pdf",
+                  "MANUAL CHINES COM GECB-1.pdf"],
+        "related": ["Gen2"],
+    },
+    "adv210": {
+        "docs": ["ADV210DP - LCBI.pdf", "ADVZÃO 210 BOS 9693A.pdf",
+                  "adv-210 baa21230b.pdf", "ADV 210 adevesao.pdf",
+                  "ADV-210 BOS9693A.pdf", "ADV 210 com OVF20 (BAA21340R).pdf",
+                  "ADV DP COM OVF10 BAA21340K.pdf",
+                  "Diagrama Controle ADV 210 com OVF10 (BAA21340G).pdf"],
+        "boards": ["LCBI", "LCB1", "LCB2", "LCBII"],
+        "drives": ["OVF10", "OVF20"],
+    },
+    "mrl": {
+        "docs": ["mrl.pdf", "MRL-W-Malha AbertaServiço[1].pdf", "MRL WEG FOD-BA.pdf",
+                  "Diagrama Controle Otis 2000 VF_MRL (BAA21000B)-1.pdf"],
+    },
+    "do2000": {
+        "docs": ["DO 2000.pdf", "Operador OTIS DO 2000.pdf", "Manual Operador DO2000.pdf"],
+        "tipo": "operador de porta",
+    },
+    "xo508": {
+        "docs": ["Otis+XO+508.pdf", "otis+XO+508+falhas.pdf"],
+    },
+    "otismatic": {
+        "docs": ["OTISMATIC.pdf"],
+    },
+    "miconic_bx": {
+        "docs": ["Esquema Miconic BX.pdf-1.pdf", "Manual BX_PT_BR_03.pdf",
+                  "CONSULTA RÁPIDA_bx-1-1.pdf"],
+    },
+    "miconic_lx": {
+        "docs": ["MANUAL MICONIC LX.pdf"],
+    },
+    "vw_vw2": {
+        "docs": ["VW1_FOD.pdf", "otisVW2 WEG Malha Fechada.pdf",
+                  "BAA21290BM VW2-2.pdf", "BAA21290CC VMW VW2-2.pdf"],
+        "drives": ["CFW09", "WEG"],
+    },
+    "lva_ultra_drive": {
+        "docs": ["Ultra drive lva -1.pdf", "manual do Ultra Drive.pdf",
+                  "Manual de Ajuste LVA-1-3.pdf", "GEN2+LVA+BAA21000S-1.pdf"],
+    },
+    "cfw": {
+        "docs": ["Manual CFW_11 Atualizado revisão 3 (2).pdf",
+                  "ATC CFW700rev1.pdf", "OVF10 por WEG CFW09.pdf",
+                  "VW2 CFW09 com LCBll-1.pdf", "Man CFW09 com LCBII.pdf",
+                  "Malha Fechada VW2 MW2 cfw09.pdf"],
+    },
+    "gdcb_regen": {
+        "docs": ["Otis-GDCB+REGEN.pdf", "Drive Regenerativo (GDCB - 55661).pdf",
+                  "BAA21000H_fod (2)_diagrama Regen.pdf"],
+    },
+    "escada_rolante": {
+        "docs": ["Otis escalera NCE manual portugues-1.pdf",
+                  "Manual Escada Rolante NCE Corrimão.pdf",
+                  "Otis escaleras Xizi diagramas.pdf",
+                  "Otis Xizi escaleras digramas.pdf",
+                  "Otis escaleras ecs 3 diagramas.pdf"],
+    },
+    "mag": {
+        "docs": ["Mag completo.pdf", "Manual Mag ADV Total 2 pb.pdf",
+                  "Mag ADV Total 2 pb.pdf", "MAG GEN2-1.pdf"],
+    },
+    "diagnostico_falhas": {
+        "docs": ["Diagnóstico de Falhas Otis red1-1.pdf",
+                  "Otis diversos falhas.pdf",
+                  "Manual Diagnóstico de Falhas (Troubleshooting).pdf",
+                  "manual geral otis (1).pdf"],
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -73,6 +203,9 @@ REGRAS FUNDAMENTAIS:
 16. Não sugerir automaticamente "cabo de tração" ou "contrapeso" nesse cenário sem evidência explícita no contexto recuperado.
 17. Se o técnico perguntar explicitamente sobre entradas DW/DFC, SEMPRE responda com as entradas/sinais específicos e seus pontos de verificação no diagrama, sem disclaimers sobre "os termos não aparecem nos documentos".
 18. Quando responder sobre Otis, SEMPRE complete a resposta inteira. Nunca deixe a resposta pela metade ou termine com "Com base nos sintomas" sem continuar.
+19. Se os documentos encontrados vêm de VÁRIOS manuais diferentes (ex.: Gen2, ADV-210, OVF10), cite os mais relevantes e pergunte ao técnico qual equipamento específico ele está trabalhando.
+20. Quando responder, mencione se há documentos RELACIONADOS disponíveis que podem complementar a resposta. Exemplo: "Também temos manual do RCB2 e do LCB2 caso precise consultar."
+21. Se a busca retornou documentos de MAIS DE UM modelo/geração, NÃO misture as informações. Separe por modelo e pergunte ao técnico qual é o dele.
 
 CONVENÇÃO DE NOMENCLATURA (OTIS) — REGRAS INVIOLÁVEIS:
 - Quando a marca for **Otis**, trate a nomenclatura histórica como consistente entre gerações antigas e novas.
@@ -164,6 +297,67 @@ Exemplos:
 - Pergunta original: "alterações ligação elétrica" → Resposta: "Controles CVF OVF10" → Busca: "alterações ligação elétrica Controles CVF OVF10"
 
 Retorne APENAS a consulta de busca (uma linha), sem explicação.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Progressive questioning prompt — asks targeted follow-up based on
+# what is already known vs what is still missing
+# ---------------------------------------------------------------------------
+PROGRESSIVE_QUESTION_PROMPT = """Você é um assistente técnico de elevadores {brand_name}.
+Você está fazendo perguntas progressivas para identificar exatamente o equipamento do técnico.
+
+O que já sabemos da conversa:
+- Modelo/equipamento: {known_model}
+- Placa/controlador: {known_board}
+- Drive/inversor: {known_drive}
+- Sintoma/erro: {known_symptom}
+- Outros detalhes: {known_other}
+
+O que ainda FALTA saber: {missing_info}
+
+Rodada de perguntas: {round_number} de {max_rounds}
+
+A busca nos manuais retornou estes documentos como possíveis fontes:
+{found_docs}
+
+REGRAS:
+1. Faça UMA ÚNICA pergunta curta e direta que preencha a informação mais importante que está faltando.
+2. Se falta MODELO: pergunte qual o modelo/geração do elevador (cite exemplos reais dos documentos encontrados).
+3. Se falta PLACA: pergunte qual a placa/controlador (cite opções encontradas: LCB1, LCB2, LCBII, RCB2, GECB, etc.).
+4. Se falta DRIVE: pergunte qual o drive/inversor (OVF10, OVF20, CFW09, CFW11, LVA, etc.).
+5. Se falta SINTOMA: pergunte o que exatamente está acontecendo (código de erro, comportamento observado).
+6. NÃO repita uma pergunta que já foi respondida na conversa.
+7. Se esta é a última rodada ({round_number} de {max_rounds}), faça uma pergunta que ajude a FECHAR o diagnóstico.
+8. TERMINE sempre com "?"
+9. Máximo 2 linhas. Sem explicações extras.
+10. Se os documentos encontrados mostram VARIANTES do mesmo modelo (ex: ADV-210 com LCBI vs LCBII), pergunte qual variante.
+
+Responda APENAS com a pergunta (sem prefixo, sem explicação).
+"""
+
+DISAMBIGUATION_PROMPT = """Você é um assistente técnico de elevadores {brand_name}.
+A busca retornou documentos de VÁRIOS modelos/equipamentos diferentes para a pergunta do técnico.
+
+Pergunta do técnico: "{query}"
+
+Documentos encontrados (por relevância):
+{found_docs}
+
+Os documentos parecem cobrir estes equipamentos distintos:
+{equipment_list}
+
+REGRAS:
+1. Faça UMA pergunta curta listando os equipamentos encontrados e pedindo para o técnico escolher.
+2. Use nomes claros dos equipamentos separados por vírgula.
+3. TERMINE com "?"
+4. Máximo 3 linhas.
+5. Se um equipamento é claramente mais relevante que os outros, destaque-o no início.
+
+Exemplo BOM: "Encontrei documentação para Gen2 com GECB, ADV-210 com LCB1 e OVF10. Qual desses é o equipamento que você está atendendo?"
+Exemplo RUIM: "Qual modelo?"
+
+Responda APENAS com a pergunta.
 """
 
 
@@ -629,10 +823,12 @@ async def generate_answer(
     brand_name: str,
     chunks: list[dict],
     chat_history: list[dict],
+    alternative_docs: list[str] | None = None,
 ) -> tuple[str, list[dict]]:
     """
     Generate final answer using Gemini with retrieved context.
     Returns (answer_text, sources_list).
+    If alternative_docs is provided, mention them at the end.
     """
     try:
         # Build context from chunks
@@ -661,7 +857,17 @@ async def generate_answer(
             history=history,
         )
 
-        full_prompt = f"{system}\n\nPergunta atual: {query}"
+        # Add instruction about alternative docs if available
+        alt_instruction = ""
+        if alternative_docs:
+            alt_list = ", ".join(alternative_docs[:5])
+            alt_instruction = (
+                f"\n\nINSTRUÇÃO ADICIONAL: Ao final da resposta, mencione que também existem "
+                f"documentos relacionados disponíveis: {alt_list}. "
+                f"Pergunte se o técnico quer consultar algum deles."
+            )
+
+        full_prompt = f"{system}{alt_instruction}\n\nPergunta atual: {query}"
 
         response = await client.aio.models.generate_content(
             model=CHAT_MODEL,
@@ -700,3 +906,379 @@ async def generate_answer(
             "Desculpe, ocorreu um erro ao gerar a resposta. Tente novamente.",
             [],
         )
+
+
+# ---------------------------------------------------------------------------
+# Progressive intelligence functions
+# ---------------------------------------------------------------------------
+
+def count_clarification_rounds(history: list[dict]) -> int:
+    """
+    Count how many consecutive clarification rounds (question → answer) have occurred.
+    A round = assistant asked a question, then user replied.
+    """
+    if not history:
+        return 0
+
+    count = 0
+    i = len(history) - 1
+    while i >= 1:
+        asst_msg = history[i] if history[i]["role"] == "assistant" else None
+        user_msg = history[i - 1] if history[i - 1]["role"] == "user" else None
+
+        # Go back looking for assistant question → user answer pairs
+        if not asst_msg:
+            # Look for the pattern: user answers, then assistant question before that
+            for j in range(i, -1, -1):
+                if history[j]["role"] == "assistant" and "?" in history[j].get("content", ""):
+                    count += 1
+                    i = j - 1
+                    break
+                elif history[j]["role"] == "user":
+                    continue
+                else:
+                    break
+            else:
+                break
+        elif "?" in asst_msg.get("content", ""):
+            count += 1
+            i -= 2
+        else:
+            break
+
+    return count
+
+
+def extract_known_context(query: str, history: list[dict]) -> dict:
+    """
+    Extract all technical context accumulated from the entire conversation.
+    Returns dict with: model, board, drive, symptom, error_code, other.
+    """
+    all_user_text = " ".join(
+        m.get("content", "") for m in (history or []) if m.get("role") == "user"
+    )
+    all_user_text = f"{all_user_text} {query}".strip().lower()
+
+    context = {
+        "model": None,
+        "board": None,
+        "drive": None,
+        "symptom": None,
+        "error_code": None,
+        "other": [],
+    }
+
+    # --- Extract model ---
+    model_patterns = [
+        (r"\b(gen\s?\d\w*)\b", "Gen2"),
+        (r"\b(adv\s?-?\s?\d{3}\w*)\b", None),
+        (r"\b(advz[aã]o)\b", "ADVzão"),
+        (r"\b(mrl)\b", "MRL"),
+        (r"\b(otismatic)\b", "OTISMATIC"),
+        (r"\b(miconic\s*(bx|lx)?)\b", None),
+        (r"\b(mag)\b", "MAG"),
+        (r"\b(xo\s?508)\b", "XO 508"),
+        (r"\b(do\s?2000)\b", "DO 2000"),
+        (r"\b(mrds)\b", "MRDS"),
+        (r"\b(ledo)\b", "LEDO"),
+        (r"\b(vw\s?\d?)\b", None),
+        (r"\b(escada\s*rolante|nce)\b", "Escada Rolante"),
+        (r"\b(bx)\b", "BX"),
+    ]
+    for pat, name in model_patterns:
+        m = re.search(pat, all_user_text, re.IGNORECASE)
+        if m:
+            context["model"] = name or m.group(1).upper().strip()
+            break
+
+    # --- Extract board ---
+    board_patterns = [
+        (r"\b(gecb)\b", "GECB"),
+        (r"\b(gdcb)\b", "GDCB"),
+        (r"\b(lcb\s?ii|lcb\s?2|lcbii)\b", None),
+        (r"\b(lcb\s?[i1]|lcbi)\b", None),
+        (r"\b(rcb\s?\d)\b", None),
+        (r"\b(gscb)\b", "GSCB"),
+        (r"\b(tcbc)\b", "TCBC"),
+        (r"\b(mcs\s?\d{3})\b", None),
+    ]
+    for pat, name in board_patterns:
+        m = re.search(pat, all_user_text, re.IGNORECASE)
+        if m:
+            raw = name or m.group(1).upper().strip()
+            # Normalize LCB II → LCBII, LCB 2 → LCB2
+            raw = re.sub(r"\s+", "", raw)
+            context["board"] = raw
+            break
+
+    # --- Extract drive ---
+    drive_patterns = [
+        (r"\b(ovf\s?\d{1,2})\b", None),
+        (r"\b(cvf)\b", "CVF"),
+        (r"\b(lvf)\b", "LVF"),
+        (r"\b(lva|ultra\s*drive)\b", "LVA"),
+        (r"\b(cfw\s?\d{2})\b", None),
+        (r"\b(weg)\b", "WEG"),
+    ]
+    for pat, name in drive_patterns:
+        m = re.search(pat, all_user_text, re.IGNORECASE)
+        if m:
+            raw = name or m.group(1).upper().strip()
+            raw = re.sub(r"\s+", "", raw)
+            context["drive"] = raw
+            break
+
+    # --- Extract symptom ---
+    symptom_patterns = [
+        (r"(porta\s+abre\s+e\s+fecha)", "porta abre e fecha"),
+        (r"(n[aã]o\s+parte|n[aã]o\s+anda|n[aã]o\s+funciona)", None),
+        (r"(n[aã]o\s+sobe|n[aã]o\s+desce)", None),
+        (r"(n[aã]o\s+fecha|n[aã]o\s+abre)", None),
+        (r"(n[aã]o\s+liga)", "não liga"),
+        (r"(trem?e|vibra|ru[ií]do)", None),
+        (r"(para\s+entre\s+andares|para\s+no\s+meio)", "para entre andares"),
+        (r"(desnivelad|desenivel)", "desnivelamento"),
+    ]
+    for pat, name in symptom_patterns:
+        m = re.search(pat, all_user_text, re.IGNORECASE)
+        if m:
+            context["symptom"] = name or m.group(1).strip()
+            break
+
+    # --- Extract error code ---
+    error_patterns = [
+        r"\berro\s+([A-Za-z]?\d{2,4})\b",
+        r"\bc[oó]digo\s+([A-Za-z]?\d{2,4})\b",
+        r"\bfalha\s+([A-Za-z]?\d{2,4})\b",
+        r"\b(e\d{3})\b",
+        r"\b(uv\d{1,2})\b",
+        r"\b(oc\d{1,2})\b",
+        r"\b(ol\d{1,2})\b",
+    ]
+    for pat in error_patterns:
+        m = re.search(pat, all_user_text, re.IGNORECASE)
+        if m:
+            context["error_code"] = m.group(1).upper().strip()
+            break
+
+    # --- Extract part numbers ---
+    pn_match = re.search(r"\b([a-z]{3}\d{4,}[a-z]*)\b", all_user_text, re.IGNORECASE)
+    if pn_match:
+        context["other"].append(f"Part number: {pn_match.group(1).upper()}")
+
+    return context
+
+
+def determine_missing_info(known: dict) -> list[str]:
+    """
+    Determine what critical information is still missing for a precise diagnosis.
+    Returns list of missing items in priority order.
+    """
+    missing = []
+
+    if not known.get("model"):
+        missing.append("modelo/geração do elevador")
+
+    if not known.get("board") and not known.get("drive"):
+        missing.append("placa/controlador ou drive/inversor")
+
+    if not known.get("symptom") and not known.get("error_code"):
+        missing.append("sintoma observado ou código de erro")
+
+    return missing
+
+
+async def generate_progressive_question(
+    query: str,
+    brand_name: str,
+    known_context: dict,
+    round_number: int,
+    chunks: list[dict],
+    history: list[dict],
+) -> str | None:
+    """
+    Generate a targeted follow-up question based on what's known and what's missing.
+    Returns the question string, or None if no more questions are needed.
+    """
+    if round_number > MAX_CLARIFICATION_ROUNDS:
+        return None
+
+    missing = determine_missing_info(known_context)
+    if not missing:
+        return None  # We have enough info
+
+    # Build doc list for context
+    doc_list_parts = []
+    seen_docs = set()
+    for c in chunks[:15]:
+        source = c.get("source", "")
+        display = source.split("/")[-1] if "/" in source else source
+        if display not in seen_docs:
+            seen_docs.add(display)
+            doc_list_parts.append(f"- {display} (score: {c.get('score', 0):.2f})")
+    found_docs_text = "\n".join(doc_list_parts[:10]) if doc_list_parts else "Nenhum"
+
+    try:
+        prompt = PROGRESSIVE_QUESTION_PROMPT.format(
+            brand_name=brand_name,
+            known_model=known_context.get("model") or "não informado",
+            known_board=known_context.get("board") or "não informado",
+            known_drive=known_context.get("drive") or "não informado",
+            known_symptom=known_context.get("symptom") or known_context.get("error_code") or "não informado",
+            known_other=", ".join(known_context.get("other", [])) or "nenhum",
+            missing_info=", ".join(missing),
+            round_number=round_number,
+            max_rounds=MAX_CLARIFICATION_ROUNDS,
+            found_docs=found_docs_text,
+        )
+
+        response = await client.aio.models.generate_content(
+            model=CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=500,
+            ),
+        )
+
+        text = _normalize_assistant_text(response.text or "")
+        logger.info(f"Progressive question (round {round_number}): '{text}'")
+
+        if _looks_like_bad_clarification(text):
+            # Fallback: generate from known missing info
+            if "modelo" in missing[0]:
+                return (
+                    "Qual o modelo ou geração do elevador que você está atendendo, "
+                    "como Gen2, ADV-210, MRL, OVF10, Miconic BX ou outro?"
+                )
+            elif "placa" in missing[0]:
+                return (
+                    "Qual a placa ou controlador instalado nesse elevador, "
+                    "como LCB1, LCB2, LCBII, RCB2, GECB ou outro?"
+                )
+            elif "sintoma" in missing[0]:
+                return (
+                    "Qual o sintoma exato ou código de erro que está aparecendo? "
+                    "Por exemplo: porta não fecha, erro no display, elevador não parte."
+                )
+            return None
+
+        return text
+
+    except Exception as e:
+        logger.error(f"Progressive question error: {e}")
+        return None
+
+
+async def generate_disambiguation_question(
+    query: str,
+    brand_name: str,
+    chunks: list[dict],
+) -> str | None:
+    """
+    When search results span multiple distinct equipment types,
+    generate a question to disambiguate.
+    """
+    # Group chunks by document
+    doc_groups = {}
+    for c in chunks[:20]:
+        source = c.get("source", "")
+        display = source.split("/")[-1] if "/" in source else source
+        if display not in doc_groups:
+            doc_groups[display] = {
+                "score": c.get("score", 0),
+                "text_preview": c.get("text", "")[:100],
+            }
+
+    if len(doc_groups) < 2:
+        return None  # Only one document, no disambiguation needed
+
+    # Extract equipment identifiers from document names
+    equipment_set = set()
+    doc_list = []
+    for doc_name, info in sorted(doc_groups.items(), key=lambda x: x[1]["score"], reverse=True):
+        doc_list.append(f"- {doc_name} (score: {info['score']:.2f})")
+        # Guess equipment from filename
+        name_lower = doc_name.lower()
+        for equip in ["gen2", "ovf10", "ovf20", "lcb1", "lcb2", "lcbii", "rcb2",
+                       "gecb", "adv", "mrl", "do2000", "xo508", "mag", "otismatic",
+                       "miconic", "vw", "lva", "cfw", "gdcb", "escada", "nce", "bx"]:
+            if equip in name_lower.replace(" ", "").replace("-", ""):
+                equipment_set.add(equip.upper())
+
+    if len(equipment_set) < 2:
+        return None  # Documents are about the same equipment
+
+    found_docs_text = "\n".join(doc_list[:8])
+    equipment_list = ", ".join(sorted(equipment_set))
+
+    try:
+        prompt = DISAMBIGUATION_PROMPT.format(
+            brand_name=brand_name,
+            query=query,
+            found_docs=found_docs_text,
+            equipment_list=equipment_list,
+        )
+
+        response = await client.aio.models.generate_content(
+            model=CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=500,
+            ),
+        )
+
+        text = _normalize_assistant_text(response.text or "")
+
+        if _looks_like_bad_clarification(text):
+            return (
+                f"Encontrei documentação sobre {equipment_list}. "
+                f"Qual desses equipamentos você está trabalhando?"
+            )
+        return text
+
+    except Exception as e:
+        logger.error(f"Disambiguation error: {e}")
+        return (
+            f"Encontrei documentação sobre {equipment_list}. "
+            f"Qual desses equipamentos você está trabalhando?"
+        )
+
+
+def get_alternative_docs_for_context(known_context: dict, chunks: list[dict]) -> list[str]:
+    """
+    Given what we know about the user's equipment, find related documents
+    from the OTIS_KNOWLEDGE_MAP that might be useful but weren't in the search results.
+    """
+    if not known_context:
+        return []
+
+    alternatives = set()
+    model = (known_context.get("model") or "").lower().replace(" ", "").replace("-", "")
+    board = (known_context.get("board") or "").lower().replace(" ", "")
+    drive = (known_context.get("drive") or "").lower().replace(" ", "")
+
+    # Find matching knowledge map entries
+    for key, info in OTIS_KNOWLEDGE_MAP.items():
+        key_clean = key.lower().replace("_", "").replace("-", "")
+        if model and (model in key_clean or key_clean in model):
+            # Add related boards/drives as alternatives
+            for related_key in info.get("boards", []) + info.get("drives", []):
+                related_clean = related_key.lower().replace(" ", "")
+                for k2, info2 in OTIS_KNOWLEDGE_MAP.items():
+                    if related_clean in k2.lower().replace("_", ""):
+                        for doc in info2.get("docs", [])[:2]:
+                            alternatives.add(doc)
+            if info.get("related"):
+                for r in info["related"]:
+                    alternatives.add(f"Documentos sobre {r}")
+
+    # Don't include docs already in the search results
+    result_docs = set()
+    for c in chunks:
+        source = c.get("source", "")
+        display = source.split("/")[-1] if "/" in source else source
+        result_docs.add(display)
+
+    return [a for a in alternatives if a not in result_docs][:5]
