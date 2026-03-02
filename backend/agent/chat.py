@@ -49,16 +49,93 @@ def _is_door_cycle_no_start_symptom(query: str) -> bool:
 
 
 def _has_explicit_model_identifier(text: str) -> bool:
+    """Return True if the text mentions any specific Otis equipment/model/document.
+    
+    This is the main gatekeeper that prevents over-disambiguation.
+    If True, Phase 6a will NOT ask 'qual equipamento?'
+    """
     q = (text or "").strip()
     if not q:
         return False
+    # Normalize "+" separators (e.g. "GEN2+LVA+BAA21000S") → treat as spaces
+    q = q.replace("+", " ")
     patterns = [
-        r"\b[a-z]{1,5}\s?-?\s?\d{1,5}[a-z]?\b",  # OVF10, XO 508, LCB1, LCB2, RCB2, ADV-210
-        r"\b(gen\s?\d|g\d)\b",                    # gen2, g3
-        r"\b(lcb[i12]|rcb\d|tcbc|gscb|mcp\d{2,4}|atc|cvf|ovf\d{1,3})\b",  # Otis boards
-        r"\b[a-z]{3}\d{4,}[a-z]*\b",              # JAA30171AAA, BAA21000S (Otis part numbers)
+        # ── Alphanumeric codes ──
+        r"\b[a-z]{1,5}\s?-?\s?\d{1,5}[a-z]?\b",  # OVF10, XO 508, LCB1, LCB2, RCB2, ADV-210, D0510
+        r"\b\d{3,5}[a-z]{0,3}\b",                  # 2000, 508, 311335
+        # ── Boards & controllers ──
+        r"\b(gen\s?\d[a-z]*|g\d)\b",                # gen2, gen2c, g3
+        r"\b(lcbi?i|lcb[12]|rcb\d|tcbc|gscb|gecb|gdcb|mcp\d{2,4}|atc)\b",
+        # ── Model names (no numbers) ──
+        r"\b(otismatic|miconic|mag|selectron)\b",
+        r"\b(mrl|do\s?2000|mrds|ledo)\b",
+        # ── Drives ──
+        r"\b(ovf\s?\d{1,2}|cvf|lvf|cfw\s?\d{0,2})\b",
+        r"\b(lva|ultra\s*drive)\b",
+        # ── ADV family ──
+        r"\b(advz[aã]o|adv)\b",
+        # ── VW, Miconic variants ──
+        r"\b(vw\s?\d?)\b",
+        r"\b(bx|lx)\b",
+        # ── MCS, URM ──
+        r"\b(mcs\s?\d{3}|urm)\b",
+        # ── Escalator ──
+        r"\b(nce|xizi)\b",
+        # ── Part numbers ──
+        r"\b[a-z]{3}\d{4,}[a-z]*\b",                # JAA30171AAA, BAA21000S, BOS9693
+        # ── Specific doc/equipment names ──
+        r"\b(wittur|midi\s*supra)\b",
+        r"\b(arobox|ac[- ]?156)\b",
+        r"\b(ifl|jr)[- ]?vvvf\b",
+        r"\b(vvvf)\b",
+        r"\b(lgtech|lg\s*tech|melco)\b",
+        r"\b(modelim)\b",
+        r"\b(cme\s*\d{3})\b",                        # CME 101
+        r"\b(d05\d{2})\b",                           # D0510, D0506, D0509
+        # ── General doc topics that are specific enough ──
+        r"\b(livro\s*de\s*pe[cç]as)\b",
+        r"\b(no[cç][oõ]es\s*gerais)\b",
+        r"\b(m[aá]quinas\s*otis)\b",
+        r"\b(manual\s*de\s*seguran[cç]a)\b",
+        r"\b(manual\s*geral\s*otis)\b",
+        r"\b(ajuste\s*de\s*freio|regular\s*freio)\b",
+        r"\b(access?e?\s*code)\b",
+        r"\b(diagn[oó]stico\s*de\s*falhas)\b",
+        r"\b(311335)\b",                              # 311335MW
     ]
     return any(re.search(p, q, re.IGNORECASE) for p in patterns)
+
+
+def _is_meta_docs_question(query: str) -> bool:
+    return bool(re.search(
+        r"(quais\s+(modelos?|documentos?|manuais)|que\s+(modelos?|documentos?|manuais)|"
+        r"quais\s+equipamentos|lista\s+de\s+(modelos?|documentos?)|"
+        r"vocês?\s+tem\s+documenta[cç]|"
+        r"me\s+(lista|mostra|diz)\s+(os|quais))",
+        query or "", re.IGNORECASE
+    ))
+
+
+def _is_general_manual_query(query: str) -> bool:
+    q = query or ""
+    return bool(re.search(
+        r"\b(manual\s*(geral\s*otis|otis\s*geral)|no[cç][oõ]es\s*gerais|falhas\s*comuns)\b",
+        q,
+        re.IGNORECASE,
+    ))
+
+
+def _is_cross_brand_query(query: str, current_brand: str) -> bool:
+    q = (query or "").lower()
+    brand = (current_brand or "").lower()
+    known_brands = [
+        "otis", "thyssen", "thyssenkrupp", "tk", "schindler", "atlas",
+        "atlas schindler", "hyundai", "mitsubishi", "orona", "kone",
+    ]
+    matched = [b for b in known_brands if re.search(rf"\b{re.escape(b)}\b", q)]
+    if not matched:
+        return False
+    return all((brand not in m) and (m not in brand) for m in matched)
 
 
 def _expand_brand_query_terms(query: str, brand_name: str) -> str:
@@ -226,9 +303,17 @@ async def chat(
     if _is_greeting_only(query):
         greeting_answer = (
             f"Olá! 👋 Bom te ver por aqui. Sou seu assistente técnico da **{brand_name}**.\n\n"
-            "Pode me descrever a falha com **modelo/geração**, **placa/controlador** e **código de erro** (se houver) que eu te respondo direto e objetivo."
+            "Qual é o **modelo/geração**, a **placa/controlador** e o **código de erro** (se houver)?"
         )
-        return await _save_and_return(db, session, greeting_answer, [], False)
+        return await _save_and_return(db, session, greeting_answer, [], True)
+
+    if _is_cross_brand_query(query, brand_name):
+        cross_brand_answer = (
+            f"Esse assistente está configurado para **{brand_name}**. "
+            "Se o equipamento for de outra marca, posso te orientar melhor se você confirmar "
+            f"o modelo equivalente em **{brand_name}** ou abrir no agente da marca correta."
+        )
+        return await _save_and_return(db, session, cross_brand_answer, [], False)
 
     # ── Phase 2: Extract accumulated context from entire conversation ───
     known_context = extract_known_context(query, history)
@@ -243,8 +328,12 @@ async def chat(
 
     # ── Phase 3: Pre-search clarification (only on first message) ───────
     # If technical question with NO model info at all and NO history context,
-    # ask for model first (but only if we haven't asked yet)
-    if can_still_ask and clarification_rounds == 0:
+    # ask for model first (but only if we haven't asked yet).
+    # BYPASS if user already specified a specific equipment identifier.
+    # BYPASS meta-questions about available documentation.
+    _is_meta_question = _is_meta_docs_question(query)
+    _is_general_manual = _is_general_manual_query(query)
+    if can_still_ask and clarification_rounds == 0 and not _has_explicit_model_identifier(query) and not _is_meta_question and not _is_general_manual:
         if should_require_model_clarification(query, history):
             missing = determine_missing_info(known_context)
             if missing:
@@ -266,7 +355,21 @@ async def chat(
                 return await _save_and_return(db, session, clarification, [], True)
 
     # ── Phase 3.5: Quick heuristic check (very short first queries) ─────
-    if can_still_ask and clarification_rounds == 0 and needs_clarification(query, history):
+    # If user gave a specific equipment identifier, trust them and skip Phase 3.5.
+    # Post-search Phase 6c handles disambiguation for ambiguous identifiers.
+    identifier_present = _has_explicit_model_identifier(query)
+    short_ambiguous_identifier = bool(
+        identifier_present
+        and len((query or "").split()) <= 2
+        and re.search(r"\b(gen\s?\d|adv|mag|vw\s?\d?|urm|manual)\b", query or "", re.IGNORECASE)
+    )
+    if (
+        can_still_ask
+        and clarification_rounds == 0
+        and not _is_general_manual
+        and (not identifier_present or short_ambiguous_identifier)
+        and needs_clarification(query, history)
+    ):
         clarification = await get_clarification_question(query, brand_name)
         if clarification:
             return await _save_and_return(db, session, clarification, [], True)
@@ -336,11 +439,18 @@ async def chat(
     # Decide: answer now, ask another targeted question, or disambiguate
 
     if can_still_ask:
-        # 6a. If no model identified in entire conversation AND results span
+        # 6a. If no model/board/drive identified in entire conversation AND results span
         #     multiple docs → ask which model/equipment
-        if not known_context.get("model") and not _has_explicit_model_identifier(enriched_query):
+        has_any_equipment = (
+            known_context.get("model")
+            or known_context.get("board")
+            or known_context.get("drive")
+        )
+        if not _is_meta_question and not _is_general_manual and not has_any_equipment and not _has_explicit_model_identifier(enriched_query):
             unique_docs = confidence.get("unique_docs", [])
-            if len(unique_docs) >= 2:
+            # Only disambiguate if results are NOT confident (scattered across many docs)
+            # If the search is confident (high score, one dominant doc), just answer.
+            if len(unique_docs) >= 2 and not confidence["confident"]:
                 # Try disambiguation first
                 disambig = await generate_disambiguation_question(
                     enriched_query, brand_name, chunks
@@ -357,9 +467,11 @@ async def chat(
                 )
                 return await _save_and_return(db, session, model_guard, [], True)
 
-        # 6b. If we have model but results are NOT confident,
-        #     ask for more specific info (board, error, symptom)
-        if not confidence["confident"]:
+        # 6b. If NO specific equipment/model was identified AND results are NOT confident,
+        #     ask for more specific info (board, error, symptom).
+        #     Skip this if user already gave a specific identifier — just answer with what we have.
+        has_specific = has_any_equipment or _has_explicit_model_identifier(enriched_query)
+        if not _is_meta_question and not has_specific and not confidence["confident"]:
             missing = determine_missing_info(known_context)
             if missing:
                 progressive_q = await generate_progressive_question(
@@ -370,17 +482,38 @@ async def chat(
                     logger.info(f"Progressive question (round {clarification_rounds + 1}): '{progressive_q}'")
                     return await _save_and_return(db, session, progressive_q, [], True)
 
-        # 6c. If confident but results come from multiple docs with similar scores,
-        #     ask which variant the user has
-        if confidence["confident"] and len(confidence.get("unique_docs", [])) >= 3:
-            score_spread = confidence.get("score_spread", 0)
-            if score_spread < 0.05:
-                # Very similar scores across many docs — worth asking
-                disambig = await generate_disambiguation_question(
-                    enriched_query, brand_name, chunks
+        # 6c. Variant disambiguation for queries that return many similar-scoring docs.
+        #     Two-tier: stricter when user gave a specific identifier (we don't want to
+        #     annoy them), looser when query is generic.
+        unique_docs_6c = confidence.get("unique_docs", [])
+        score_spread_6c = confidence.get("score_spread", 1.0)
+
+        should_disambig_6c = False
+        is_lookup_query = bool(re.search(r"\b(diagrama|esquema|manual|guia|menu|completo)\b", enriched_query, re.IGNORECASE))
+        is_ambiguous_family = bool(re.search(r"\b(cme\s*\d{3}|adv\s?-?\s?210|gen\s?2|vw\s?2|baa\d{5}|mag)\b", enriched_query, re.IGNORECASE))
+        if has_specific:
+            # User gave an identifier → still disambiguate if results are clearly ambiguous
+            should_disambig_6c = is_lookup_query and (
+                (len(unique_docs_6c) >= 3 and score_spread_6c < 0.08)
+                or len(unique_docs_6c) >= 6
+                or (is_ambiguous_family and len(unique_docs_6c) >= 2)
+            )
+        else:
+            # No identifier → disambiguate more easily
+            should_disambig_6c = len(unique_docs_6c) >= 3 and score_spread_6c < 0.08
+
+        if not _is_meta_question and not _is_general_manual and should_disambig_6c:
+            disambig = await generate_disambiguation_question(
+                enriched_query, brand_name, chunks
+            )
+            if disambig:
+                return await _save_and_return(db, session, disambig, [], True)
+            if len(unique_docs_6c) >= 2:
+                fallback_disambig = (
+                    "Encontrei mais de uma versão de manual/diagrama para esse tema. "
+                    "Qual versão exata você quer (modelo, revisão/arquivo ou código completo)?"
                 )
-                if disambig:
-                    return await _save_and_return(db, session, disambig, [], True)
+                return await _save_and_return(db, session, fallback_disambig, [], True)
 
     # ── Phase 7: We're answering now ────────────────────────────────────
     # Either we have enough confidence, or we've exhausted our question budget

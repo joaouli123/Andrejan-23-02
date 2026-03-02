@@ -1,0 +1,173 @@
+﻿======================================================================
+ OTIS 300-SCENARIO TEST SUITE
+ API: https://api.uxcodedev.com.br
+ Started: 2026-02-25T22:13:03.354202
+======================================================================
+
+Running 300 tests...
+
+[  1/300] Test 1 (A) - Generic error
+  Q: erro no elevador
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  2/300] Test 2 (A) - Door won't close, no model
+  Q: porta n├úo fecha
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  3/300] Test 3 (A) - Drive calibration, no model
+  Q: como calibrar o drive?
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  4/300] Test 4 (A) - Won't start, no model
+  Q: elevador n├úo parte
+  A: Encontrei documenta├º├úo sobre ADV, BX, CFW, LCBII, VW. Qual desses equipamentos voc├¬ est├í trabalhando?...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  5/300] Test 5 (A) - Board problem, no model
+  Q: problema na placa
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  6/300] Test 6 (A) - Inverter fault, no model
+  Q: falha no inversor
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  7/300] Test 7 (A) - Brake adjustment, no model
+  Q: ajuste do freio
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  8/300] Test 8 (A) - Electrical diagram, no model
+  Q: esquema el├®trico
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[  9/300] Test 9 (A) - Error code, no model
+  Q: c├│digo de erro no painel
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 10/300] Test 10 (A) - Door cycle no start
+  Q: porta abre e fecha e n├úo parte
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 11/300] Test 11 (A) - LED blinking, no model
+  Q: LED piscando
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 12/300] Test 12 (A) - Leveling problem
+  Q: problema de nivelamento
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 13/300] Test 13 (A) - Motor noise
+  Q: motor fazendo barulho
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 14/300] Test 14 (A) - Vibration
+  Q: elevador vibrando
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 15/300] Test 15 (A) - Safety chain open
+  Q: cadeia de seguran├ºa aberta
+  A: Encontrei documenta├º├úo sobre ADV, BX, DO2000, GEN2, LVA, MAG, MICONIC. Qual desses equipamentos voc├¬ est├í trabalhando?...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 16/300] Test 16 (A) - Board reset, no model
+  Q: como resetar a placa?
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 17/300] Test 17 (A) - Rescue procedure, no model
+  Q: procedimento de resgate
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 18/300] Test 18 (A) - Change parameters, no model
+  Q: alterar par├ómetros
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 19/300] Test 19 (A) - Intermittent fault
+  Q: falha intermitente
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 20/300] Test 20 (A) - Irregular speed
+  Q: velocidade irregular
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 21/300] Test 21 (A) - Controller manual, no model
+  Q: manual do controlador
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 22/300] Test 22 (A) - Replace component, no model
+  Q: substituir componente
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 23/300] Test 23 (A) - Door test, no model
+  Q: teste de porta
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 24/300] Test 24 (A) - URM problem, no model
+  Q: problema na URM
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 25/300] Test 25 (A) - How to configure, no model
+  Q: como configurar?
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 26/300] Test 26 (A) - Wiring diagram, no model
+  Q: diagrama de liga├º├úo
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 27/300] Test 27 (A) - Elevator stopped
+  Q: elevador parou
+  A: Para eu te responder com precis├úo em Otis, me confirme o modelo/gera├º├úo do elevador (como aparece na etiqueta), a placa/...
+  Ô£à CLARIFY | Expected: CLARIFY
+     Ô£à Correctly asked for clarification
+
+[ 28/300] Test 28 (A) - Brake won't hold
+  Q: freio n├úo segura
+  A: Ol├í! Eu sou seu assistente t├®cnico da **Otis**.  Para te responder com precis├úo (inclusive em modelos antigos e novos), ...

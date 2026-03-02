@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-02-27T19:26:43.302591",
+  "api": "https://api.uxcodedev.com.br",
+  "total": 2,
+  "passed": 2,
+  "partial": 0,
+  "failed": 0,
+  "errors": 0,
+  "results": [
+    {
+      "id": 190,
+      "passed": true,
+      "details": [
+        "✅ Correctly asked for clarification"
+      ]
+    },
+    {
+      "id": 195,
+      "passed": true,
+      "details": [
+        "✅ Answered (did not block)",
+        "✅ Found expected doc reference"
+      ]
+    }
+  ]
+}
