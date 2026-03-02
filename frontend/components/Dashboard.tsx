@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   CreditCard, 
@@ -88,16 +88,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return () => window.clearInterval(timer);
   }, []);
 
-    const loadSessions = async () => {
+    const loadSessions = useCallback(async () => {
       await Storage.syncChatsFromDatabase();
       setSessions(Storage.getSessions());
-    };
+    }, []);
 
   useEffect(() => {
     if (user) {
         void loadSessions();
     }
-  }, [user]);
+  }, [user, loadSessions]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const retryAndRefresh = async () => {
+      await Storage.retryPendingChatSync();
+      await Storage.syncChatsFromDatabase();
+      setSessions(Storage.getSessions());
+    };
+
+    const onOnline = () => {
+      void retryAndRefresh();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void retryAndRefresh();
+    }, 30000);
+
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(intervalId);
+    };
+  }, [user, loadSessions]);
 
   const handleStartChat = (agentId: string) => {
     try {

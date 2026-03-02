@@ -11,6 +11,8 @@ const BRANDS_KEY = 'elevex_brands';
 const MODELS_KEY = 'elevex_models';
 const SESSION_DB_ID_MAP_KEY = 'elevex_session_db_id_map';
 const QUERY_USAGE_KEY = 'elevex_query_usage';
+const PENDING_CHAT_UPSERTS_KEY = 'elevex_pending_chat_upserts';
+const PENDING_CHAT_DELETES_KEY = 'elevex_pending_chat_deletes';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHATS_SYNC_MIN_INTERVAL_MS = 5000;
 const AGENTS_SYNC_MIN_INTERVAL_MS = 15000;
@@ -511,7 +513,61 @@ const replaceChatsForUser = (userId: string, sessions: ChatSession[]) => {
     localStorage.setItem(CHATS_KEY, JSON.stringify([...others, ...sessions]));
 };
 
-const saveChatToDatabase = async (chat: ChatSession): Promise<void> => {
+const getPendingChatUpserts = (): ChatSession[] => {
+    try {
+        const raw = localStorage.getItem(PENDING_CHAT_UPSERTS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const savePendingChatUpserts = (upserts: ChatSession[]) => {
+    localStorage.setItem(PENDING_CHAT_UPSERTS_KEY, JSON.stringify(upserts));
+};
+
+const getPendingChatDeletes = (): string[] => {
+    try {
+        const raw = localStorage.getItem(PENDING_CHAT_DELETES_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+        return [];
+    }
+};
+
+const savePendingChatDeletes = (deletes: string[]) => {
+    localStorage.setItem(PENDING_CHAT_DELETES_KEY, JSON.stringify(deletes));
+};
+
+const enqueueChatUpsert = (chat: ChatSession) => {
+    const upserts = getPendingChatUpserts();
+    const index = upserts.findIndex(item => item.id === chat.id);
+    if (index >= 0) {
+        upserts[index] = chat;
+    } else {
+        upserts.push(chat);
+    }
+    savePendingChatUpserts(upserts);
+};
+
+const enqueueChatDelete = (sessionId: string) => {
+    const deletes = getPendingChatDeletes();
+    if (!deletes.includes(sessionId)) {
+        deletes.push(sessionId);
+        savePendingChatDeletes(deletes);
+    }
+
+    const upserts = getPendingChatUpserts().filter(item => item.id !== sessionId);
+    savePendingChatUpserts(upserts);
+};
+
+const hasPendingChatMutations = (): boolean => {
+    return getPendingChatDeletes().length > 0 || getPendingChatUpserts().length > 0;
+};
+
+const saveChatToDatabase = async (chat: ChatSession): Promise<boolean> => {
     const dbSessionId = resolveDatabaseSessionId(chat.id);
 
     const sessionPayload = {
@@ -525,13 +581,13 @@ const saveChatToDatabase = async (chat: ChatSession): Promise<void> => {
     };
 
     const { error: upsertError } = await supabase.from('chat_sessions').upsert([sessionPayload]);
-    if (upsertError) return;
+    if (upsertError) return false;
 
     for (const tableName of MESSAGE_TABLES) {
         const { error: deleteError } = await supabase.from(tableName).delete().eq('session_id', dbSessionId);
         if (deleteError) continue;
 
-        if (!Array.isArray(chat.messages) || chat.messages.length === 0) return;
+        if (!Array.isArray(chat.messages) || chat.messages.length === 0) return true;
 
         const baseMessages = chat.messages.map(message => ({
             session_id: dbSessionId,
@@ -541,7 +597,7 @@ const saveChatToDatabase = async (chat: ChatSession): Promise<void> => {
         }));
 
         let { error: messageError } = await supabase.from(tableName).insert(baseMessages);
-        if (!messageError) return;
+        if (!messageError) return true;
 
         const fallbackMessages = chat.messages.map(message => ({
             session_id: dbSessionId,
@@ -551,13 +607,54 @@ const saveChatToDatabase = async (chat: ChatSession): Promise<void> => {
         }));
 
         ({ error: messageError } = await supabase.from(tableName).insert(fallbackMessages));
-        if (!messageError) return;
+        if (!messageError) return true;
     }
+
+    return false;
 };
 
-const deleteChatFromDatabase = async (sessionId: string): Promise<void> => {
+const deleteChatFromDatabase = async (sessionId: string): Promise<boolean> => {
     const dbSessionId = resolveDatabaseSessionId(sessionId);
-    await supabase.from('chat_sessions').delete().eq('id', dbSessionId);
+    const { error } = await supabase.from('chat_sessions').delete().eq('id', dbSessionId);
+    return !error;
+};
+
+let pendingChatFlushPromise: Promise<void> | null = null;
+
+const flushPendingChatMutations = async (): Promise<void> => {
+    if (pendingChatFlushPromise) return pendingChatFlushPromise;
+
+    pendingChatFlushPromise = (async () => {
+        const pendingDeletes = getPendingChatDeletes();
+        const remainingDeletes: string[] = [];
+        for (const sessionId of pendingDeletes) {
+            try {
+                const deleted = await deleteChatFromDatabase(sessionId);
+                if (!deleted) remainingDeletes.push(sessionId);
+            } catch {
+                remainingDeletes.push(sessionId);
+            }
+        }
+        savePendingChatDeletes(remainingDeletes);
+
+        const pendingUpserts = getPendingChatUpserts();
+        const remainingUpserts: ChatSession[] = [];
+        for (const chat of pendingUpserts) {
+            try {
+                const saved = await saveChatToDatabase(chat);
+                if (!saved) remainingUpserts.push(chat);
+            } catch {
+                remainingUpserts.push(chat);
+            }
+        }
+        savePendingChatUpserts(remainingUpserts);
+    })();
+
+    try {
+        await pendingChatFlushPromise;
+    } finally {
+        pendingChatFlushPromise = null;
+    }
 };
 
 const fetchMessagesForSessions = async (sessionIds: string[]): Promise<SupabaseMessageRow[]> => {
@@ -587,8 +684,9 @@ const fetchMessagesForSessions = async (sessionIds: string[]): Promise<SupabaseM
 
 export const syncChatsFromDatabase = async (force = false): Promise<ChatSession[]> => {
     const now = Date.now();
+    const hasPending = hasPendingChatMutations();
     if (!force && chatsSyncPromise) return chatsSyncPromise;
-    if (!force && (now - lastChatsSyncAt) < CHATS_SYNC_MIN_INTERVAL_MS) {
+    if (!force && !hasPending && (now - lastChatsSyncAt) < CHATS_SYNC_MIN_INTERVAL_MS) {
         const user = getUserProfile();
         return user ? getChats().filter(c => c.userId === user.id) : [];
     }
@@ -597,6 +695,8 @@ export const syncChatsFromDatabase = async (force = false): Promise<ChatSession[
         try {
             const user = getUserProfile();
             if (!user) return [];
+
+            await flushPendingChatMutations();
 
             const { data: sessionsData, error: sessionsError } = await supabase
                 .from('chat_sessions')
@@ -651,6 +751,10 @@ export const syncChatsFromDatabase = async (force = false): Promise<ChatSession[
     })();
 
     return chatsSyncPromise;
+};
+
+export const retryPendingChatSync = async (): Promise<void> => {
+    await flushPendingChatMutations();
 };
 
 // --- MOCK PROFILES ---
@@ -773,7 +877,8 @@ export const saveChat = (chat: ChatSession) => {
         chats.push(chat);
     }
     localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
-    void saveChatToDatabase(chat);
+    enqueueChatUpsert(chat);
+    void flushPendingChatMutations();
 };
 
 // --- SESSIONS ---
@@ -853,7 +958,8 @@ export const deleteSession = (sessionId: string) => {
     if (session && user && (session.userId === user.id || user.isAdmin)) {
         const filtered = chats.filter(c => c.id !== sessionId);
         localStorage.setItem(CHATS_KEY, JSON.stringify(filtered));
-        void deleteChatFromDatabase(sessionId);
+        enqueueChatDelete(sessionId);
+        void flushPendingChatMutations();
     }
 };
 

@@ -42,6 +42,8 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
   // Header Menu State
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [quotaStatus, setQuotaStatus] = useState(Storage.getUserQueryQuotaStatus());
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState('');
 
   const normalizeAssistantReply = (text: string, brandName?: string) => {
     const raw = String(text || '').trim();
@@ -411,6 +413,163 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
     }
   };
 
+  const startEditingMessage = (message: Message) => {
+    if (isLoading || sendingRef.current || message.role !== 'user') return;
+    setEditingMessageId(message.id);
+    setEditingMessageText(message.text);
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMessageId(null);
+    setEditingMessageText('');
+  };
+
+  const saveEditedMessage = async () => {
+    if (!session || !editingMessageId || isLoading || sendingRef.current) return;
+
+    const editedText = editingMessageText.trim();
+    if (!editedText) return;
+
+    const editedIndex = session.messages.findIndex(
+      (message) => message.id === editingMessageId && message.role === 'user'
+    );
+
+    if (editedIndex < 0) {
+      cancelEditingMessage();
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const baseMessages = session.messages.slice(0, editedIndex + 1).map((message, index) =>
+      index === editedIndex
+        ? { ...message, text: editedText, timestamp: nowIso }
+        : message
+    );
+
+    const baseSession: ChatSession = {
+      ...session,
+      messages: baseMessages,
+      lastMessageAt: nowIso,
+      preview: editedText.substring(0, 50) + (editedText.length > 50 ? '...' : ''),
+      pendingUserQuestion: undefined,
+      knownModel: undefined,
+    };
+
+    setSession(baseSession);
+    Storage.saveSession(baseSession);
+    onSessionUpdate();
+    cancelEditingMessage();
+
+    const agent = agents.find(a => a.id === baseSession.agentId) || agents[0];
+    if (!agent) return;
+
+    sendingRef.current = true;
+    setIsLoading(true);
+
+    try {
+      const consumption = Storage.consumeUserQueryCredit();
+      setQuotaStatus(consumption.status);
+
+      if (!consumption.allowed) {
+        const blockedMessage: Message = {
+          id: (Date.now() + 999).toString(),
+          role: 'model',
+          text: `Seu limite de consultas do plano ${consumption.status.plan} acabou nas últimas 24h. Nova consulta disponível em ${formatCountdown(consumption.status.msUntilReset)}.`,
+          timestamp: new Date().toISOString()
+        };
+
+        const blockedSession = {
+          ...baseSession,
+          messages: [...baseSession.messages, blockedMessage],
+          lastMessageAt: new Date().toISOString(),
+          preview: blockedMessage.text.substring(0, 90)
+        };
+
+        setSession(blockedSession);
+        Storage.saveSession(blockedSession);
+        onSessionUpdate();
+        return;
+      }
+
+      let shouldRefundCredit = true;
+
+      const history = baseSession.messages.map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }));
+
+      const ragResponse = await queryRAG(
+        editedText,
+        agent.systemInstruction,
+        agent.brandName,
+        history
+      );
+
+      const responseTextRaw = (ragResponse && ragResponse.answer)
+        ? ragResponse.answer
+        : "❌ Não encontrei informações relevantes na base de conhecimento para responder sua pergunta.\n\nPor favor:\n- Verifique se os documentos corretos foram carregados\n- Tente reformular sua pergunta com termos mais específicos";
+
+      const responseText = normalizeAssistantReply(responseTextRaw, agent?.brandName);
+
+      const modelMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: responseText,
+        timestamp: new Date().toISOString()
+      };
+
+      const asksForModel = /\b(modelo exato|qual\s+e\s+o\s+modelo|me\s+confirme.*modelo|me\s+informe\s+o\s+modelo|preciso\s+do\s+modelo)\b/i.test(responseText);
+      const notFoundPatterns = [
+        /n[aã]o\s+encontrei\s+informa[cç][õo]es\s+relevantes/i,
+        /n[aã]o\s+encontrei\s+na\s+base\s+de\s+conhecimento/i,
+        /sem\s+dados\s+suficientes/i,
+        /n[aã]o\s+foi\s+poss[ií]vel\s+localizar/i,
+      ];
+      const isNotFoundReply = notFoundPatterns.some(pattern => pattern.test(responseText));
+
+      const finalSession: ChatSession = {
+        ...baseSession,
+        messages: [...baseSession.messages, modelMessage],
+        lastMessageAt: new Date().toISOString(),
+        title: baseSession.messages.length === 1 ? editedText.substring(0, 30) : baseSession.title,
+        ...(asksForModel ? { pendingUserQuestion: editedText } : {}),
+      };
+
+      setSession(finalSession);
+      Storage.saveSession(finalSession);
+      shouldRefundCredit = asksForModel || isNotFoundReply;
+      if (shouldRefundCredit) {
+        Storage.refundUserQueryCredit();
+      }
+      setQuotaStatus(Storage.getUserQueryQuotaStatus());
+      onSessionUpdate();
+    } catch (error) {
+      Storage.refundUserQueryCredit();
+
+      const fallbackMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: 'model',
+        text: '❌ Não consegui processar a edição agora. Nenhuma consulta foi descontada. Tente novamente em alguns segundos.',
+        timestamp: new Date().toISOString(),
+      };
+
+      const errorSession: ChatSession = {
+        ...baseSession,
+        messages: [...baseSession.messages, fallbackMessage],
+        lastMessageAt: new Date().toISOString(),
+        preview: fallbackMessage.text.substring(0, 90),
+      };
+
+      setSession(errorSession);
+      Storage.saveSession(errorSession);
+      setQuotaStatus(Storage.getUserQueryQuotaStatus());
+      onSessionUpdate();
+    } finally {
+      setIsLoading(false);
+      sendingRef.current = false;
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !isLoading && !sendingRef.current) {
       e.preventDefault();
@@ -707,8 +866,57 @@ const ChatSessionView: React.FC<ChatSessionProps> = ({
                                 {message.text}
                             </ReactMarkdown>
                         </div>
+                    ) : editingMessageId === message.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editingMessageText}
+                            onChange={(e) => setEditingMessageText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelEditingMessage();
+                                return;
+                              }
+                              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveEditedMessage();
+                              }
+                            }}
+                            className="w-full min-h-[90px] resize-y rounded-lg border border-blue-200 bg-white/95 p-2 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            autoFocus
+                          />
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={saveEditedMessage}
+                              disabled={!editingMessageText.trim() || isLoading}
+                              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              <Check size={12} /> Salvar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingMessage}
+                              className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              <XIcon size={12} /> Cancelar
+                            </button>
+                          </div>
+                        </div>
                     ) : (
-                        <p className="whitespace-pre-wrap">{message.text}</p>
+                        <div>
+                          <p className="whitespace-pre-wrap">{message.text}</p>
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => startEditingMessage(message)}
+                              disabled={isLoading}
+                              className="inline-flex items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-[10px] font-semibold text-blue-100 hover:bg-white/30 disabled:opacity-50"
+                            >
+                              <Edit2 size={11} /> Editar
+                            </button>
+                          </div>
+                        </div>
                     )}
                     <div className={`text-[10px] mt-2 text-right font-medium tracking-wide ${message.role === 'user' ? 'text-blue-100' : 'text-slate-400'}`}>
                     {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

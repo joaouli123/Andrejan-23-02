@@ -206,6 +206,9 @@ REGRAS FUNDAMENTAIS:
 19. Se os documentos encontrados vêm de VÁRIOS manuais diferentes (ex.: Gen2, ADV-210, OVF10), cite os mais relevantes e pergunte ao técnico qual equipamento específico ele está trabalhando.
 20. Quando responder, mencione se há documentos RELACIONADOS disponíveis que podem complementar a resposta. Exemplo: "Também temos manual do RCB2 e do LCB2 caso precise consultar."
 21. Se a busca retornou documentos de MAIS DE UM modelo/geração, NÃO misture as informações. Separe por modelo e pergunte ao técnico qual é o dele.
+22. Idioma final obrigatório: **Português (Brasil)**. Se o conteúdo da fonte estiver em espanhol, inglês ou outro idioma, traduza tecnicamente para português.
+23. Se houver texto com ruído de OCR, frases truncadas ou fora de contexto, reescreva de forma clara e coerente, sem inventar dados.
+24. Preserve exatamente códigos, siglas técnicas, nomes de placas, modelos e valores numéricos (ex.: OVF10, LCB2, GECB, E015).
 
 CONVENÇÃO DE NOMENCLATURA (OTIS) — REGRAS INVIOLÁVEIS:
 - Quando a marca for **Otis**, trate a nomenclatura histórica como consistente entre gerações antigas e novas.
@@ -232,6 +235,25 @@ Contexto dos documentos:
 
 Histórico da conversa:
 {history}
+"""
+
+PORTUGUESE_REWRITE_PROMPT = """Você é um revisor técnico de documentação de elevadores.
+
+Tarefa:
+1. Garantir que a resposta final esteja em **português do Brasil**.
+2. Se houver trechos em espanhol/inglês/outra língua, traduzir para português técnico.
+3. Corrigir texto com ruído de OCR, frases quebradas ou sem contexto.
+4. Manter o sentido técnico original e **não inventar informação**.
+5. Preservar exatamente códigos e identificadores técnicos (modelos, placas, erros, valores).
+6. Manter formato em Markdown e a seção de fontes (📄 Fonte) quando existir.
+
+Marca: {brand_name}
+Pergunta do técnico: {query}
+
+Resposta atual para revisar:
+{answer}
+
+Retorne somente a versão final revisada em português.
 """
 
 CLARIFICATION_PROMPT = """O usuário fez uma pergunta sobre elevadores {brand_name}, mas ela pode ser muito genérica.
@@ -376,6 +398,64 @@ def _normalize_assistant_text(text: str) -> str:
     cleaned = cleaned.replace(" ?", "?").replace(" .", ".").replace(" ,", ",")
 
     return cleaned
+
+
+def _needs_portuguese_rewrite(text: str) -> bool:
+    """Heuristic to detect non-PT or noisy outputs that should be rewritten."""
+    if not text:
+        return False
+
+    low = text.lower()
+
+    # Obvious OCR/noise symptoms
+    if "�" in text or re.search(r"\b[a-z]{1,2}\s+[a-z]{1,2}\s+[a-z]{1,2}\b", low):
+        return True
+
+    # Spanish/English markers in sentence context
+    foreign_markers = [
+        r"\bfuente\b", r"\bpágina\b", r"\baver[ií]a\b", r"\bfalla\b", r"\busted\b", r"\bpuede\b",
+        r"\bsource\b", r"\bpage\b", r"\bwarning\b", r"\bplease\b", r"\bcheck\b", r"\berror code\b",
+    ]
+    marker_hits = sum(1 for pattern in foreign_markers if re.search(pattern, low, re.IGNORECASE))
+    if marker_hits >= 2:
+        return True
+
+    # If text uses "Fuente" citation style, convert/rewrite to PT style
+    if re.search(r"📄\s*fuente", low):
+        return True
+
+    return False
+
+
+async def _ensure_portuguese_technical_quality(answer: str, query: str, brand_name: str) -> str:
+    """Translate/rewrite answer to clean PT-BR when needed, preserving technical fidelity."""
+    normalized = _normalize_assistant_text(answer)
+    if not normalized:
+        return normalized
+
+    if not _needs_portuguese_rewrite(normalized):
+        return normalized
+
+    try:
+        prompt = PORTUGUESE_REWRITE_PROMPT.format(
+            brand_name=brand_name,
+            query=query,
+            answer=normalized,
+        )
+        response = await client.aio.models.generate_content(
+            model=CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=4096,
+            ),
+        )
+
+        rewritten = _normalize_assistant_text(response.text or "")
+        return rewritten or normalized
+    except Exception as exc:
+        logger.warning(f"Portuguese rewrite fallback due to error: {exc}")
+        return normalized
 
 
 def _default_clarification_question(brand_name: str) -> str:
@@ -778,10 +858,18 @@ def needs_clarification(query: str, chat_history: list[dict]) -> bool:
     if len(q.split()) <= 2:
         return True
 
-    # Check for generic indicators
-    for pattern in GENERIC_INDICATORS:
-        if re.search(pattern, q, re.IGNORECASE):
-            return True
+    # Generic troubleshooting asks should clarify equipment/model first
+    if re.search(r"\btroubleshooting\b", q, re.IGNORECASE):
+        return True
+    if re.search(r"\b(divers[oa]s?\s+falhas|falhas\s+divers[oa]s?)\b", q, re.IGNORECASE):
+        return True
+
+    # Check for generic indicators only on short queries (≤4 words)
+    # Longer queries like "manual geral otis falhas comuns" have enough context
+    if len(q.split()) <= 4:
+        for pattern in GENERIC_INDICATORS:
+            if re.search(pattern, q, re.IGNORECASE):
+                return True
 
     return False
 
@@ -881,6 +969,7 @@ async def generate_answer(
         answer = _normalize_assistant_text(response.text or "")
         if not answer:
             answer = "Não encontrei informação suficiente nos documentos desta marca para responder com segurança."
+        answer = await _ensure_portuguese_technical_quality(answer, query, brand_name)
 
         # Extract sources from chunks used (clean display names)
         sources = []
